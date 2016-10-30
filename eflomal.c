@@ -192,7 +192,12 @@ void text_alignment_sample(
     // are sampled explicitly, and the categorical distributions are fixed
     // throughout the iteration.
     if (model >= 3) {
-        size_t e_count[ta->source->vocabulary_size];
+        size_t *e_count = malloc(sizeof(size_t)*ta->source->vocabulary_size);
+        if (e_count == NULL) {
+            perror("text_alignment_sample(): unable to allocate e_count");
+            exit(1);
+        }
+
         for (size_t i=0; i<ta->source->vocabulary_size; i++)
             e_count[i] = 0;
 
@@ -244,6 +249,8 @@ void text_alignment_sample(
             for (size_t i=FERT_ARRAY_LEN-2; i; i--)
                 buf[i] /= buf[i-1];
         }
+
+        free(e_count);
     }
 
     // aa_jp1_table[j] will contain the alignment of the nearest non-NULL
