@@ -11,8 +11,14 @@ def main():
         '-v', '--verbose', dest='verbose',
         action='store_true', help='Enable verbose output')
     parser.add_argument(
+        '--overwrite', dest='overwrite',
+        action='store_true', help='Overwrite existing output files')
+    parser.add_argument(
         '-r', '--reverse', dest='reverse',
         action='store_true', help='Align in the reverse direction')
+    parser.add_argument(
+        '-p', '--plain', dest='plain',
+        action='store_true', help='Use plain output format rather than Moses')
     parser.add_argument(
         '--null-prior', dest='null_prior', default=0.2, metavar='X',
         type=float, help='Prior probability of NULL alignment')
@@ -73,7 +79,7 @@ def main():
                   file=sys.stderr, flush=True)
             sys.exit(1)
 
-    if os.path.exists(args.links_filename):
+    if (not args.overwrite) and os.path.exists(args.links_filename):
         print('ERROR: output file %s exists, will not overwrite!' % \
                 args.links_filename,
               file=sys.stderr, flush=True)
@@ -117,9 +123,10 @@ def main():
     trg_sents = tuple(trg_sents)
 
     align(src_sents, trg_sents, src_voc_size, trg_voc_size,
-          return_links=True, links_filename=args.links_filename,
+          return_links=False, links_filename=args.links_filename,
           model=args.model, n_iterations=iters if any(iters) else None,
           annealing_iterations=args.annealing_iters,
+          moses_format=not args.plain,
           quiet=not args.verbose, rel_iterations=args.length)
 
 

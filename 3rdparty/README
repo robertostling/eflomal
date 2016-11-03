@@ -1,0 +1,12 @@
+This derectory contains third-party code and data. Copyright belongs to their
+respective authors.
+
+The following scripts are from the Workshop on Parallel Text shared tasks,
+created by Rada Mihalcea:
+
+wa_check_align.pl
+wa_eval_align.pl 
+
+The files in data/ are part of the English-Hindi part of the WPT-05 shared
+task.
+

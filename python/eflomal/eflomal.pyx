@@ -125,6 +125,7 @@ def align(
         str statistics_filename=None,
         str scores_filename=None,
         bool return_links=False,
+        bool moses_format=False,
         int model=3,
         tuple n_iterations=None,
         int annealing_iterations=0,
@@ -144,6 +145,9 @@ def align(
     scores_filename -- if given, write sentence alignment scoeres here
     return_links -- if true, a tuple with links (from read_links) will be
                     added to the tuple returned from this function
+    moses_format -- if true, use the Moses-style format with srcidx-trgidx
+                    tuples rather than one index per target token (and -1 for
+                    NULL links)
     model -- alignment model (1 = IBM1, 2 = HMM, 3 = HMM+fertility)
     n_iterations -- 3-tuple with number of iterations per model, if this is
                     not given the numbers will be computed automatically based
@@ -188,6 +192,8 @@ def align(
                 '-n', str(clean_sentences),
                 '-1', str(n_iterations[0])]
         if quiet: args.append('-q')
+        if moses_format: args.append('-e')
+        if annealing_iterations: args.extend(['-a', str(annealing_iterations)])
         if model >= 2: args.extend(['-2', str(n_iterations[1])])
         if model >= 3: args.extend(['-3', str(n_iterations[2])])
         if links_filename: args.extend(['-l', links_filename])

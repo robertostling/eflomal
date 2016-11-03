@@ -42,3 +42,10 @@ There are three main ways of using `eflomal`:
     the preprocessing and file conversions necessary. See the docstrings
     in [eflomal.pyx](./python/eflomal/eflomal.pyx) for documentation.
 
+In addition, there are convenience scripts for aligning and symmetrizing (with
+the `atools` program from `fast_align`) as well as evaluating with data from
+the WPT shared task datasets. These work the same way as in `efmaral`,
+please see its
+[README](https://github.com/robertostling/efmaral/blob/master/README.md) for
+details.
+

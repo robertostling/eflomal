@@ -134,6 +134,27 @@ void text_alignment_write(const struct text_alignment *ta, FILE *file) {
     }
 }
 
+void text_alignment_write_moses(const struct text_alignment *ta, FILE *file) {
+    for (size_t sent=0; sent<ta->target->n_sentences; sent++) {
+        if (ta->target->sentences[sent] == NULL ||
+            ta->source->sentences[sent] == NULL) {
+            fputc('\n', file);
+        } else {
+            size_t length = ta->target->sentences[sent]->length;
+            const link_t *links = ta->sentence_links[sent];
+            int first = 1;
+            for (size_t j=0; j<length; j++) {
+                if (links[j] != NULL_LINK) {
+                    fprintf(file, first? "%d-%d": " %d-%d",
+                            (int)links[j], (int)j);
+                    first = 0;
+                }
+            }
+            fputc('\n', file);
+        }
+    }
+}
+
 void text_alignment_write_vocab(const struct text_alignment *ta, FILE *file) {
     fprintf(file, "%u %u\n",
             ta->source->vocabulary_size-1, ta->target->vocabulary_size-1);
@@ -775,7 +796,7 @@ static void help(const char *filename) {
 "Usage: %s [-s source_input] [-t target_input] [-l links_output] "
 "[-v statistics_output] [-c scores_output] [-1 n_IBM1_iters] [-2 n_HMM_iters] "
 "[-3 n_fertility_iters] [-a n_annealing_iters] [-n n_clean_sentences] "
-"[-q] -m model_type\n", filename);
+"[-q] [-e] -m model_type\n", filename);
 }
 
 int main(int argc, char *argv[]) {
@@ -786,12 +807,12 @@ int main(int argc, char *argv[]) {
     char *links_filename = NULL, *vocab_filename = NULL;
     char *scores_filename = NULL;
     int n_iters[3];
-    int n_anneal = 0, n_clean = 0, quiet = 0, model = -1;
+    int n_anneal = 0, n_clean = 0, quiet = 0, moses = 0, model = -1;
     double null_prior = 0.2;
 
     n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
 
-    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:n:qm:p:h")) != -1) {
+    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:n:qm:p:he")) != -1) {
         switch(opt) {
             case 's': source_filename = optarg; break;
             case 't': target_filename = optarg; break;
@@ -804,6 +825,7 @@ int main(int argc, char *argv[]) {
             case 'a': n_anneal = atoi(optarg); break;
             case 'n': n_clean = atoi(optarg); break;
             case 'q': quiet = 1; break;
+            case 'e': moses = 1; break;
             case 'm': model = atoi(optarg);
                       if (model < 1 || model > 3) {
                           fprintf(stderr, "Model must be 1, 2 or 3!\n");
@@ -851,17 +873,17 @@ int main(int argc, char *argv[]) {
     if (!quiet)
         fprintf(stderr, "Randomized alignment: %.3f s\n", seconds() - t0);
 
-    for (int model=1; model<=3; model++) {
+    for (int m=1; m<=model; m++) {
         if (n_iters[model-1]) {
             if (!quiet)
                 fprintf(stderr, "Aligning with model %d (%d iterations)\n",
-                        model, n_iters[model-1]);
-            ta->model = model;
+                        m, n_iters[m-1]);
+            ta->model = m;
 
             t0 = seconds();
             text_alignment_make_counts(ta);
 
-            for (int i=0; i<n_iters[model-1]; i++) {
+            for (int i=0; i<n_iters[m-1]; i++) {
                 text_alignment_sample(ta, &state, 1.0, NULL);
             }
             if (!quiet)
@@ -900,7 +922,8 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Writing alignments to %s\n", links_filename);
         FILE *file = (!strcmp(links_filename, "-"))? stdout
                      : fopen(links_filename, "w");
-        text_alignment_write(ta, file);
+        if (moses) text_alignment_write_moses(ta, file);
+        else text_alignment_write(ta, file);
         if (file != stdout) fclose(file);
     }
 
