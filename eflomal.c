@@ -874,7 +874,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Randomized alignment: %.3f s\n", seconds() - t0);
 
     for (int m=1; m<=model; m++) {
-        if (n_iters[model-1]) {
+        if (n_iters[m-1]) {
             if (!quiet)
                 fprintf(stderr, "Aligning with model %d (%d iterations)\n",
                         m, n_iters[m-1]);
