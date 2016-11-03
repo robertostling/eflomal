@@ -37,9 +37,9 @@ cpdef tuple read_text(pyfile, bool lowercase, int prefix_len, int suffix_len):
     sents = []
     for line in pyfile:
         if lowercase:
-            tokens = line.split()
+            tokens = line.lower().split()
         else:
-            tokens = line.lowercase().split()
+            tokens = line.split()
         n = len(tokens)
         sent = np.empty(n, dtype=np.uint32)
 
