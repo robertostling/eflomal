@@ -10,7 +10,52 @@ import subprocess
 from tempfile import NamedTemporaryFile
 
 import numpy as np
-from scipy.sparse import coo_matrix
+
+
+cpdef tuple read_text(pyfile, bool lowercase, int prefix_len, int suffix_len):
+    """Read a tokenized text file as a list of indexed sentences.
+    
+    Optionally transform the vocabulary according to the parameters.
+    
+    pyfile -- file to read
+    lowercase -- if True, all tokens are lowercased
+    prefix_len -- if non-zero, all tokens are cut of after so many characters
+    suffix_len -- if non-zero, as above, but cutting from the right side
+
+    Returns:
+    a tuple (list sents, dict index) containing the actual sentences and the
+    string-to-index mapping used.
+    """
+    cdef:
+        np.ndarray[np.uint32_t, ndim=1] sent
+        list sents, tokens
+        str line, token
+        dict index
+        int i, n, idx
+
+    index = {}
+    sents = []
+    for line in pyfile:
+        if lowercase:
+            tokens = line.split()
+        else:
+            tokens = line.lowercase().split()
+        n = len(tokens)
+        sent = np.empty(n, dtype=np.uint32)
+
+        for i in range(n):
+            token = tokens[i]
+            if prefix_len != 0: token = token[:prefix_len]
+            elif suffix_len != 0: token = token[-suffix_len:]
+            idx = index.get(token, -1)
+            if idx == -1:
+                idx = len(index)
+                index[token] = idx
+            sent[i] = idx
+
+        sents.append(sent)
+
+    return (sents, index)
 
 
 cpdef write_text(pyfile, tuple sents, int voc_size):
@@ -85,7 +130,8 @@ def align(
         int annealing_iterations=0,
         int clean_sentences=0,
         bool quiet=True,
-        double rel_iterations=1.0):
+        double rel_iterations=1.0,
+        bool use_gdb=False):
     """Call the eflomal binary to perform word alignment
 
     Arguments:
@@ -112,6 +158,7 @@ def align(
     """
 
     assert len(src_sents) == len(trg_sents)
+    n_sents = len(src_sents)
 
     if n_iterations is None:
         iters = max(1, int(rel_iterations*10000 / math.sqrt(len(src_sents))))
@@ -131,7 +178,9 @@ def align(
     with NamedTemporaryFile('wb') as srcf, \
          NamedTemporaryFile('wb') as trgf:
         write_text(srcf, src_sents, src_voc_size)
+        src_sents = None
         write_text(trgf, trg_sents, trg_voc_size)
+        trg_sents = None
         args = ['eflomal',
                 '-m', str(model),
                 '-s', srcf.name,
@@ -145,14 +194,14 @@ def align(
         if statistics_filename: args.extend(['-v', statistics_filename])
         if scores_filename: args.extend(['-s', scores_filename])
         if not quiet: sys.stderr.write(' '.join(args) + '\n')
-        #args = ['gdb', '-ex=run', '--args'] + args
+        if use_gdb: args = ['gdb', '-ex=run', '--args'] + args
         subprocess.call(args)
 
     retval = []
 
     if return_links:
         with open(links_filename, 'rb') as f:
-            retval.append(read_links(f, len(trg_sents)))
+            retval.append(read_links(f, n_sents))
         if remove_links_filename:
             os.remove(links_filename)
 
