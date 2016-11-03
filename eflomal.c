@@ -675,6 +675,10 @@ struct sentence *sentence_read(FILE *file, token vocabulary_size) {
         exit(EXIT_FAILURE);
     }
     if (length == 0) return NULL;
+    if (length > MAX_SENT_LEN) {
+        perror("sentence_read(): sentence too long");
+        exit(EXIT_FAILURE);
+    }
     struct sentence *sentence;
     sentence = malloc(sizeof(struct sentence) + length*sizeof(token));
     if (sentence == NULL) {
