@@ -17,17 +17,15 @@ the following article:
 
 ## Installing
 
-To compile and install the C binary:
+To compile and install the C binary and the Python bindings:
 
     make
     sudo make install
+    python3 setup.py install
 
 edit `Makefile` manually if you want to install somewhere other than the
 default `/usr/local/bin`.
 
-The Python library can be installed as follows:
-
-    python3 setup.py install --user
 
 ## Using
 
@@ -48,4 +46,44 @@ the WPT shared task datasets. These work the same way as in `efmaral`,
 please see its
 [README](https://github.com/robertostling/efmaral/blob/master/README.md) for
 details.
+
+## Performance
+
+This is a comparison between eflomal,
+[efmaral](https://github.com/robertostling/efmaral) and fast_align.
+
+As the tables below show, both efmaral and eflomal beat fast_align in both
+accuracy and CPU time by a comfortable margin. efmaral is somewhat more
+accurate and sometimes faster (in wall time, with enough CPU cores) than
+eflomal, but requires more RAM (hundreds of GB for large corpora).
+
+### eflomal
+
+| Languages | Sentences | AER | CPU time (s) | Real time (s) |
+| --------- | ---------:| ---:| ------------:| -------------:|
+| English-French | 1,130,551 | 0.094 | 580 | 169 |
+| English-Inkutitut | 340,601 | 0.252 | 92 | 52 |
+| Romanian-English | 48,681 | 0.299 | 94 | 48 |
+| English-Hindi | 3,530 | 0.497 | 18 | 9 |
+
+### efmaral
+
+| Languages | Sentences | AER | CPU time (s) | Real time (s) |
+| --------- | ---------:| ---:| ------------:| -------------:|
+| English-Swedish | 1,862,426 | 0.133 | 1,719 | 620 |
+| English-French | 1,130,551 | 0.085 | 763 | 279 |
+| English-Inkutitut | 340,601 | 0.235 | 122 | 46 |
+| Romanian-English | 48,681 | 0.287 | 161 | 46 |
+| English-Hindi | 3,530 | 0.483 | 98 | 10 |
+
+### fast_align
+
+| Languages | Sentences | AER | CPU time (s) | Real time (s) |
+| --------- | ---------:| ---:| ------------:| -------------:|
+| English-Swedish | 1,862,426 | 0.205 | 11,090 | 672 |
+| English-French | 1,130,551 | 0.153 | 3,840 | 241 |
+| English-Inuktitut | 340,601 | 0.287 | 477 | 47 |
+| Romanian-English | 48,681 | 0.325 | 208 | 17 |
+| English-Hindi | 3,530 | 0.672 | 24 | 2 |
+
 
