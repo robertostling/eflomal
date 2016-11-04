@@ -57,10 +57,14 @@ accuracy and CPU time by a comfortable margin. efmaral is somewhat more
 accurate and sometimes faster (in wall time, with enough CPU cores) than
 eflomal, but requires more RAM (hundreds of GB for large corpora).
 
+Note that all timing figures below include alignments in both directions
+(run in parallel) and symmetrization.
+
 ### eflomal
 
 | Languages | Sentences | AER | CPU time (s) | Real time (s) |
 | --------- | ---------:| ---:| ------------:| -------------:|
+| English-Swedish | 1,862,426 | 0.138 | 1,160 | 628 |
 | English-French | 1,130,551 | 0.094 | 580 | 169 |
 | English-Inkutitut | 340,601 | 0.252 | 92 | 52 |
 | Romanian-English | 48,681 | 0.299 | 94 | 48 |
