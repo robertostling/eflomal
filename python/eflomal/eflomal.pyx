@@ -130,6 +130,7 @@ def align(
         bool reverse=False,
         tuple n_iterations=None,
         int annealing_iterations=0,
+        int argmax_samples=-1,
         int clean_sentences=0,
         bool quiet=True,
         double rel_iterations=1.0,
@@ -156,6 +157,8 @@ def align(
                     not given the numbers will be computed automatically based
                     on rel_iterations
     annealing_iterations -- number of simulated annealing iterations
+    argmax_samples -- number of per-sentence samples before performing
+                         final argmax operation
     clean_sentences -- if given, assume that only the first _clean_sentences_
                        sentences in the data are truly parallel, this is
                        useful mostly to append candidate sentence pairs to
@@ -169,12 +172,18 @@ def align(
 
     if n_iterations is None:
         iters = max(1, int(rel_iterations*10000 / math.sqrt(len(src_sents))))
+        iters4 = max(1, iters//4)
+        if argmax_samples < 0:
+            argmax_samples = max(1, iters//2)
+            iters = max(1, iters-argmax_samples)
         if model == 1:
             n_iterations = (iters, 0, 0)
         elif model == 2:
-            n_iterations = (max(1, iters//4), iters, 0)
+            n_iterations = (iters4, iters, 0)
         else:
-            n_iterations = (max(1, iters//4), max(1, iters//4), iters)
+            n_iterations = (iters4, iters4, iters)
+    elif argmax_samples < 0:
+        argmax_samples = 1
 
     remove_links_filename = False
     if return_links and links_filename is None:
@@ -193,6 +202,7 @@ def align(
                 '-s', srcf.name,
                 '-t', trgf.name,
                 '-n', str(clean_sentences),
+                '-g', str(argmax_samples),
                 '-1', str(n_iterations[0])]
         if reverse: args.append('-r')
         if quiet: args.append('-q')

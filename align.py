@@ -56,6 +56,9 @@ def main():
         '-a', '--anneal', dest='annealing_iters', default=0, metavar='X',
         type=int, help='Number of annealing iterations')
     parser.add_argument(
+        '--argmax-samples', dest='argmax_samples', default=-1, metavar='X',
+        type=int, help='Number of per-sentence samples before argmax')
+    parser.add_argument(
         '-s', '--source', dest='source_filename', type=str, metavar='filename',
         help='Source text filename', required=True)
     parser.add_argument(
@@ -126,6 +129,7 @@ def main():
           return_links=False, links_filename=args.links_filename,
           model=args.model, n_iterations=iters if any(iters) else None,
           annealing_iterations=args.annealing_iters,
+          argmax_samples=args.argmax_samples,
           reverse=args.reverse,
           moses_format=not args.plain,
           quiet=not args.verbose, rel_iterations=args.length)

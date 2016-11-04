@@ -840,13 +840,13 @@ int main(int argc, char *argv[]) {
     char *links_filename = NULL, *vocab_filename = NULL;
     char *scores_filename = NULL;
     int n_iters[3];
-    int n_anneal = 0, n_clean = 0, quiet = 0, moses = 0, reverse = 0,
-        model = -1;
+    int n_anneal = 0, n_clean = 0, n_argmax = 1, quiet = 0, moses = 0, 
+        reverse = 0, model = -1;
     double null_prior = 0.2;
 
     n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
 
-    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:n:rqm:p:he")) != -1) {
+    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:g:n:rqm:p:he")) != -1) {
         switch(opt) {
             case 's': source_filename = optarg; break;
             case 't': target_filename = optarg; break;
@@ -857,6 +857,7 @@ int main(int argc, char *argv[]) {
             case '2': n_iters[1] = atoi(optarg); break;
             case '3': n_iters[2] = atoi(optarg); break;
             case 'a': n_anneal = atoi(optarg); break;
+            case 'g': n_argmax = atoi(optarg); break;
             case 'n': n_clean = atoi(optarg); break;
             case 'q': quiet = 1; break;
             case 'r': reverse = 1; break;
@@ -942,7 +943,7 @@ int main(int argc, char *argv[]) {
     }
 
     t0 = seconds();
-    text_alignment_sample(ta, &state, 1e6, NULL, n_iters[model-1]);
+    text_alignment_sample(ta, &state, 1e6, NULL, n_argmax);
     if (!quiet)
         fprintf(stderr, "Final argmax iteration: %.3f s\n", seconds() - t0);
 
