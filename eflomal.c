@@ -69,8 +69,6 @@ typedef double count;
 #define MIN(x,y)    (((x)<(y))?(x):(y))
 #define MAX(x,y)    (((x)>(y))?(x):(y))
 
-// TODO: which data structures are most convenient from Python?
-
 struct sentence {
     link_t length;
     token tokens[];
@@ -134,7 +132,8 @@ void text_alignment_write(const struct text_alignment *ta, FILE *file) {
     }
 }
 
-void text_alignment_write_moses(const struct text_alignment *ta, FILE *file) {
+void text_alignment_write_moses(
+        const struct text_alignment *ta, FILE *file, int reverse) {
     for (size_t sent=0; sent<ta->target->n_sentences; sent++) {
         if (ta->target->sentences[sent] == NULL ||
             ta->source->sentences[sent] == NULL) {
@@ -145,8 +144,13 @@ void text_alignment_write_moses(const struct text_alignment *ta, FILE *file) {
             int first = 1;
             for (size_t j=0; j<length; j++) {
                 if (links[j] != NULL_LINK) {
-                    fprintf(file, first? "%d-%d": " %d-%d",
-                            (int)links[j], (int)j);
+                    if (reverse) {
+                        fprintf(file, first? "%d-%d": " %d-%d",
+                                (int)j, (int)links[j]);
+                    } else {
+                        fprintf(file, first? "%d-%d": " %d-%d",
+                                (int)links[j], (int)j);
+                    }
                     first = 0;
                 }
             }
@@ -196,7 +200,8 @@ inline static size_t get_fert_index(size_t e, int fert) {
 
 void text_alignment_sample(
         struct text_alignment *ta, random_state *state, count lambda,
-        count *sentence_scores) {
+        count *sentence_scores, int n_samples) {
+    const int argmax = (lambda > 100.0);
     const int model = ta->model;
     struct sentence **source_sentences = ta->source->sentences;
     struct sentence **target_sentences = ta->target->sentences;
@@ -274,6 +279,8 @@ void text_alignment_sample(
         free(e_count);
     }
 
+    count *acc_ps = NULL;
+    if (argmax) acc_ps = malloc(MAX_SENT_LEN*(MAX_SENT_LEN+1)*sizeof(count));
     // aa_jp1_table[j] will contain the alignment of the nearest non-NULL
     // aligned word to the right (or source_sentence->length if there is no
     // such word)
@@ -307,6 +314,15 @@ void text_alignment_sample(
                 if (links[j] != NULL_LINK)
                     fert[links[j]]++;
         }
+
+        int samples_left = n_samples;
+        if (argmax) {
+            for (size_t k=0; k<target_length*(source_length+1); k++)
+                acc_ps[k] = (count) 0.0;
+        }
+
+resample:;
+        size_t acc_base = 0;
 
         // aa_jm1 will always contain the alignment of the nearest non-NULL
         // aligned word to the left (or -1 if there is no such word)
@@ -467,11 +483,19 @@ void text_alignment_sample(
                     sentence_scores[sent] += logf(max_p);
                 }
                 ps_sum += ta->null_prior * ta->inv_source_count_sum[0] *
-                          (NULL_ALPHA +(count)null_n);
+                          (NULL_ALPHA + (count)null_n);
             }
             ps[source_length] = ps_sum;
 
-            if (lambda != 1.0 && lambda < 100.0) {
+            if (argmax) {
+                count scale = (count)1.0 / ps_sum;
+                acc_ps[acc_base] += ps[0] * scale;
+                for (size_t i=1; i<source_length+1; i++)
+                    acc_ps[acc_base+i] += (ps[i] - ps[i-1]) * scale;
+                acc_base += source_length+1;
+            }
+
+            if (lambda != 1.0 && !argmax) {
                 ps_sum = (count) 0.0;
                 count last_p = (count) 0.0;
                 for (size_t i=0; i<source_length+1; i++) {
@@ -482,21 +506,24 @@ void text_alignment_sample(
             }
             link_t new_i;
             if (sentence_scores == NULL) {
-                if (lambda < 100.0) {
+                if ((!argmax) || samples_left) {
                     // normal case: simply from distribution
                     new_i = random_unnormalized_cumulative_categorical32(
                             state, ps, source_length+1);
                 } else {
-                    // if lambda is very high, approximate with argmax
+                    // if we have collected enough samples, do argmax over
+                    // the accumulated probabilities
                     new_i = 0;
-                    count best_p = (count) ps[0];
+                    acc_base -= source_length+1;
+                    count best_p = acc_ps[acc_base + 0];
                     for (size_t i=1; i<source_length+1; i++) {
-                        const count p = ps[i] - ps[i-1];
+                        const count p = acc_ps[acc_base + i];
                         if (p > best_p) {
                             new_i = i;
                             best_p = p;
                         }
                     }
+                    acc_base += source_length+1;
                 }
             } else {
                 // if we are just calculating scores, don't sample at all
@@ -549,7 +576,13 @@ void text_alignment_sample(
         }
         if (sentence_scores != NULL)
             sentence_scores[sent] /= (count)target_length;
+
+        if (argmax && samples_left) {
+            samples_left--;
+            goto resample;
+        }
     }
+    if (argmax) free(acc_ps);
 }
 
 void text_alignment_make_counts(struct text_alignment *ta) {
@@ -807,12 +840,13 @@ int main(int argc, char *argv[]) {
     char *links_filename = NULL, *vocab_filename = NULL;
     char *scores_filename = NULL;
     int n_iters[3];
-    int n_anneal = 0, n_clean = 0, quiet = 0, moses = 0, model = -1;
+    int n_anneal = 0, n_clean = 0, quiet = 0, moses = 0, reverse = 0,
+        model = -1;
     double null_prior = 0.2;
 
     n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
 
-    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:n:qm:p:he")) != -1) {
+    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:n:rqm:p:he")) != -1) {
         switch(opt) {
             case 's': source_filename = optarg; break;
             case 't': target_filename = optarg; break;
@@ -825,6 +859,7 @@ int main(int argc, char *argv[]) {
             case 'a': n_anneal = atoi(optarg); break;
             case 'n': n_clean = atoi(optarg); break;
             case 'q': quiet = 1; break;
+            case 'r': reverse = 1; break;
             case 'e': moses = 1; break;
             case 'm': model = atoi(optarg);
                       if (model < 1 || model > 3) {
@@ -855,9 +890,13 @@ int main(int argc, char *argv[]) {
                 source->n_sentences, target->n_sentences);
         return 1;
     }
-    if (!quiet)
+    if (!quiet) {
         fprintf(stderr, "Read texts (%zd sentences): %.3f s\n",
                 source->n_sentences, seconds() - t0);
+        fprintf(stderr, "Vocabulary sizes are %"PRItoken" (source),"
+                        " %"PRItoken" (target)\n",
+                source->vocabulary_size, target->vocabulary_size);
+    }
 
     t0 = seconds();
     struct text_alignment *ta = text_alignment_create(source, target);
@@ -884,7 +923,7 @@ int main(int argc, char *argv[]) {
             text_alignment_make_counts(ta);
 
             for (int i=0; i<n_iters[m-1]; i++) {
-                text_alignment_sample(ta, &state, 1.0, NULL);
+                text_alignment_sample(ta, &state, 1.0, NULL, 0);
             }
             if (!quiet)
                 fprintf(stderr, "Done: %.3f s\n", seconds() - t0);
@@ -896,14 +935,14 @@ int main(int argc, char *argv[]) {
         t0 = seconds();
         const count step = 1.0 / (count)n_anneal;
         lambda += 2.0 * step;
-        text_alignment_sample(ta, &state, lambda, NULL);
+        text_alignment_sample(ta, &state, lambda, NULL, 0);
         if (!quiet)
             fprintf(stderr, "Sampling iteration %d (lambda = %.3f): %.3f s\n",
                     i+1, lambda, seconds() - t0);
     }
 
     t0 = seconds();
-    text_alignment_sample(ta, &state, 1e6, NULL);
+    text_alignment_sample(ta, &state, 1e6, NULL, n_iters[model-1]);
     if (!quiet)
         fprintf(stderr, "Final argmax iteration: %.3f s\n", seconds() - t0);
 
@@ -922,7 +961,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Writing alignments to %s\n", links_filename);
         FILE *file = (!strcmp(links_filename, "-"))? stdout
                      : fopen(links_filename, "w");
-        if (moses) text_alignment_write_moses(ta, file);
+        if (moses) text_alignment_write_moses(ta, file, reverse);
         else text_alignment_write(ta, file);
         if (file != stdout) fclose(file);
     }
@@ -936,7 +975,7 @@ int main(int argc, char *argv[]) {
                      : fopen(scores_filename, "w");
 
         if (!quiet) fprintf(stderr, "Computing sentence scores\n");
-        text_alignment_sample(ta, &state, 1.0, scores);
+        text_alignment_sample(ta, &state, 1.0, scores, 0);
 
         for (size_t i=0; i<ta->source->n_sentences; i++)
             fprintf(file, "%g\n", -scores[i]);

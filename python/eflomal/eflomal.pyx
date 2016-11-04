@@ -127,6 +127,7 @@ def align(
         bool return_links=False,
         bool moses_format=False,
         int model=3,
+        bool reverse=False,
         tuple n_iterations=None,
         int annealing_iterations=0,
         int clean_sentences=0,
@@ -149,6 +150,8 @@ def align(
                     tuples rather than one index per target token (and -1 for
                     NULL links)
     model -- alignment model (1 = IBM1, 2 = HMM, 3 = HMM+fertility)
+    reverse -- if both this and moses_format is true, reverse the direction
+               of the alignments written
     n_iterations -- 3-tuple with number of iterations per model, if this is
                     not given the numbers will be computed automatically based
                     on rel_iterations
@@ -191,6 +194,7 @@ def align(
                 '-t', trgf.name,
                 '-n', str(clean_sentences),
                 '-1', str(n_iterations[0])]
+        if reverse: args.append('-r')
         if quiet: args.append('-q')
         if moses_format: args.append('-e')
         if annealing_iterations: args.extend(['-a', str(annealing_iterations)])

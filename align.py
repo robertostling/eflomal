@@ -126,6 +126,7 @@ def main():
           return_links=False, links_filename=args.links_filename,
           model=args.model, n_iterations=iters if any(iters) else None,
           annealing_iterations=args.annealing_iters,
+          reverse=args.reverse,
           moses_format=not args.plain,
           quiet=not args.verbose, rel_iterations=args.length)
 
