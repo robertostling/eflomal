@@ -18,12 +18,15 @@ SYMMETRIZATION=$4
 #fi
 
 DIR=`dirname $0`/..
-FWD=`mktemp`
-BWD=`mktemp`
-python3 $DIR/align.py --verbose --overwrite -s "$1" -t "$2" -o "$FWD" "${@:5}" &
-python3 $DIR/align.py --verbose --overwrite -r -s "$1" -t "$2" -o "$BWD" "${@:5}" &
-
-wait
-atools -c $SYMMETRIZATION -i "$FWD" -j "$BWD" >"$3"
-rm "$FWD" "$BWD"
+if [ "$SYMMETRIZATION" == "none" ]; then
+    python3 $DIR/align.py --verbose --overwrite -s "$1" -t "$2" -o "$3" "${@:5}"
+else
+    FWD=`mktemp`
+    BWD=`mktemp`
+    python3 $DIR/align.py --verbose --overwrite -s "$1" -t "$2" -o "$FWD" "${@:5}" &
+    python3 $DIR/align.py --verbose --overwrite -r -s "$1" -t "$2" -o "$BWD" "${@:5}" &
+    wait
+    atools -c $SYMMETRIZATION -i "$FWD" -j "$BWD" >"$3"
+    rm "$FWD" "$BWD"
+fi
 

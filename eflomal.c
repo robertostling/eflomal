@@ -132,7 +132,8 @@ void text_alignment_write(const struct text_alignment *ta, FILE *file) {
     }
 }
 
-void text_alignment_write_moses(const struct text_alignment *ta, FILE *file) {
+void text_alignment_write_moses(
+        const struct text_alignment *ta, FILE *file, int reverse) {
     for (size_t sent=0; sent<ta->target->n_sentences; sent++) {
         if (ta->target->sentences[sent] == NULL ||
             ta->source->sentences[sent] == NULL) {
@@ -143,8 +144,13 @@ void text_alignment_write_moses(const struct text_alignment *ta, FILE *file) {
             int first = 1;
             for (size_t j=0; j<length; j++) {
                 if (links[j] != NULL_LINK) {
-                    fprintf(file, first? "%d-%d": " %d-%d",
-                            (int)links[j], (int)j);
+                    if (reverse) {
+                        fprintf(file, first? "%d-%d": " %d-%d",
+                                (int)j, (int)links[j]);
+                    } else {
+                        fprintf(file, first? "%d-%d": " %d-%d",
+                                (int)links[j], (int)j);
+                    }
                     first = 0;
                 }
             }
@@ -477,7 +483,7 @@ resample:;
                     sentence_scores[sent] += logf(max_p);
                 }
                 ps_sum += ta->null_prior * ta->inv_source_count_sum[0] *
-                          (NULL_ALPHA +(count)null_n);
+                          (NULL_ALPHA + (count)null_n);
             }
             ps[source_length] = ps_sum;
 
@@ -834,12 +840,13 @@ int main(int argc, char *argv[]) {
     char *links_filename = NULL, *vocab_filename = NULL;
     char *scores_filename = NULL;
     int n_iters[3];
-    int n_anneal = 0, n_clean = 0, quiet = 0, moses = 0, model = -1;
+    int n_anneal = 0, n_clean = 0, quiet = 0, moses = 0, reverse = 0,
+        model = -1;
     double null_prior = 0.2;
 
     n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
 
-    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:n:qm:p:he")) != -1) {
+    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:n:rqm:p:he")) != -1) {
         switch(opt) {
             case 's': source_filename = optarg; break;
             case 't': target_filename = optarg; break;
@@ -852,6 +859,7 @@ int main(int argc, char *argv[]) {
             case 'a': n_anneal = atoi(optarg); break;
             case 'n': n_clean = atoi(optarg); break;
             case 'q': quiet = 1; break;
+            case 'r': reverse = 1; break;
             case 'e': moses = 1; break;
             case 'm': model = atoi(optarg);
                       if (model < 1 || model > 3) {
@@ -882,9 +890,13 @@ int main(int argc, char *argv[]) {
                 source->n_sentences, target->n_sentences);
         return 1;
     }
-    if (!quiet)
+    if (!quiet) {
         fprintf(stderr, "Read texts (%zd sentences): %.3f s\n",
                 source->n_sentences, seconds() - t0);
+        fprintf(stderr, "Vocabulary sizes are %"PRItoken" (source),"
+                        " %"PRItoken" (target)\n",
+                source->vocabulary_size, target->vocabulary_size);
+    }
 
     t0 = seconds();
     struct text_alignment *ta = text_alignment_create(source, target);
@@ -949,7 +961,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Writing alignments to %s\n", links_filename);
         FILE *file = (!strcmp(links_filename, "-"))? stdout
                      : fopen(links_filename, "w");
-        if (moses) text_alignment_write_moses(ta, file);
+        if (moses) text_alignment_write_moses(ta, file, reverse);
         else text_alignment_write(ta, file);
         if (file != stdout) fclose(file);
     }
