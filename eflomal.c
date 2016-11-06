@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <time.h>
+#include <omp.h>
 
 #ifndef EXACT_MATH
 #include "simd_math_prims.h"
@@ -115,23 +116,6 @@ void text_alignment_free(struct text_alignment *ta) {
     free(ta);
 }
 
-void text_alignment_write(const struct text_alignment *ta, FILE *file) {
-    for (size_t sent=0; sent<ta->target->n_sentences; sent++) {
-        if (ta->target->sentences[sent] == NULL ||
-            ta->source->sentences[sent] == NULL) {
-            fprintf(file, "\n");
-        } else {
-            size_t length = ta->target->sentences[sent]->length;
-            const link_t *links = ta->sentence_links[sent];
-            for (size_t j=0; j<length; j++) {
-                fprintf(file, (j == 0)? "%d" : " %d",
-                        (links[j] == NULL_LINK)? -1 : links[j]);
-            }
-            fprintf(file, "\n");
-        }
-    }
-}
-
 void text_alignment_write_moses(
         const struct text_alignment *ta, FILE *file, int reverse) {
     for (size_t sent=0; sent<ta->target->n_sentences; sent++) {
@@ -199,10 +183,11 @@ inline static size_t get_fert_index(size_t e, int fert) {
 }
 
 void text_alignment_sample(
-        struct text_alignment *ta, random_state *state, count lambda,
-        count *sentence_scores, int n_samples, struct text_alignment **tas,
+        struct text_alignment *ta, random_state *state,
+        count *sentence_scores, struct text_alignment **tas,
         int n_samplers) {
-    const int argmax = (lambda > 100.0);
+    const int n_samples = 1;
+    const int argmax = tas != NULL;
     const int model = ta->model;
     struct sentence **source_sentences = ta->source->sentences;
     struct sentence **target_sentences = ta->target->sentences;
@@ -504,15 +489,6 @@ resample:;
                 acc_base += source_length+1;
             }
 
-            if (lambda != 1.0 && !argmax) {
-                ps_sum = (count) 0.0;
-                count last_p = (count) 0.0;
-                for (size_t i=0; i<source_length+1; i++) {
-                    ps_sum += powf(ps[i]-last_p, lambda);
-                    last_p = ps[i];
-                    ps[i] = ps_sum;
-                }
-            }
             link_t new_i;
             if (sentence_scores == NULL) {
                 if ((!argmax) || samples_left) {
@@ -666,7 +642,7 @@ void text_alignment_randomize(struct text_alignment *ta, random_state *state) {
 }
 
 struct text_alignment *text_alignment_create(
-        struct text *source, struct text *target)
+        const struct text *source, const struct text *target)
 {
     if (source->n_sentences != target->n_sentences) {
         fprintf(stderr, "text_alignment_create(): number of sentences "
@@ -839,89 +815,29 @@ struct text* text_read(const char *filename) {
     return text;
 }
 
-static void help(const char *filename) {
-    fprintf(stderr,
-"Usage: %s [-s source_input] [-t target_input] [-l links_output] "
-"[-v statistics_output] [-c scores_output] [-1 n_IBM1_iters] [-2 n_HMM_iters] "
-"[-3 n_fertility_iters] [-a n_annealing_iters] [-n n_clean_sentences] "
-"[-i n_independent_samplers][-q] [-e] -m model_type\n", filename);
-}
-
-int main(int argc, char *argv[]) {
+static void align(
+        int reverse,
+        const struct text *source,
+        const struct text *target,
+        int model,
+        double null_prior,
+        int n_samplers,
+        int quiet,
+        const int *n_iters,
+        const char *links_filename,
+        const char *stats_filename,
+        const char *scores_filename)
+{
     double t0;
     random_state state;
-    int opt;
-    char *source_filename = "-", *target_filename = "-";
-    char *links_filename = NULL, *vocab_filename = NULL;
-    char *scores_filename = NULL;
-    int n_iters[3];
-    int n_anneal = 0, n_clean = 0, n_samplers = 1, n_argmax = 1, quiet = 0,
-        moses = 0, reverse = 0, model = -1;
-    double null_prior = 0.2;
-
-    n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
-
-    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:g:n:i:rqm:p:he"))
-            != -1)
-    {
-        switch(opt) {
-            case 's': source_filename = optarg; break;
-            case 't': target_filename = optarg; break;
-            case 'l': links_filename = optarg; break;
-            case 'v': vocab_filename = optarg; break;
-            case 'c': scores_filename = optarg; break;
-            case '1': n_iters[0] = atoi(optarg); break;
-            case '2': n_iters[1] = atoi(optarg); break;
-            case '3': n_iters[2] = atoi(optarg); break;
-            case 'a': n_anneal = atoi(optarg); break;
-            case 'g': n_argmax = atoi(optarg); break;
-            case 'n': n_clean = atoi(optarg); break;
-            case 'i': n_samplers = atoi(optarg); break;
-            case 'q': quiet = 1; break;
-            case 'r': reverse = 1; break;
-            case 'e': moses = 1; break;
-            case 'm': model = atoi(optarg);
-                      if (model < 1 || model > 3) {
-                          fprintf(stderr, "Model must be 1, 2 or 3!\n");
-                          return 1;
-                      }
-                      break;
-            case 'p': null_prior = atof(optarg); break;
-            case 'h':
-            default:
-                help(argv[0]);
-                return 1;
-        }
-    }
-
-    if (model == -1) {
-        help(argv[0]);
-        return 1;
-    }
+    struct text_alignment *tas[n_samplers];
 
     random_system_state(&state);
 
     t0 = seconds();
-    struct text *source = text_read(source_filename);
-    struct text *target = text_read(target_filename);
-    if (source->n_sentences != target->n_sentences) {
-        fprintf(stderr, "Source text has %zd sentences but target has %zd\n",
-                source->n_sentences, target->n_sentences);
-        return 1;
-    }
-    if (!quiet) {
-        fprintf(stderr, "Read texts (%zd sentences): %.3f s\n",
-                source->n_sentences, seconds() - t0);
-        fprintf(stderr, "Vocabulary sizes are %"PRItoken" (source),"
-                        " %"PRItoken" (target)\n",
-                source->vocabulary_size, target->vocabulary_size);
-    }
-
-    t0 = seconds();
-    struct text_alignment *tas[n_samplers];
     for (int i=0; i<n_samplers; i++) {
-        tas[i] = text_alignment_create(source, target);
-        tas[i]->n_clean = n_clean;
+        tas[i] = text_alignment_create(
+                (reverse? target: source), (reverse? source: target));
         tas[i]->null_prior = null_prior;
     }
     if (!quiet)
@@ -960,8 +876,7 @@ int main(int argc, char *argv[]) {
                 text_alignment_make_counts(tas[i]);
 
                 for (int j=0; j<n_iters[m-1]; j++) {
-                    text_alignment_sample(tas[i], &local_state, 1.0, NULL, 0,
-                                          NULL, 1);
+                    text_alignment_sample(tas[i], &local_state, NULL, NULL, 1);
                 }
             }
             if (!quiet)
@@ -969,39 +884,19 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    count lambda = (count) 1.0;
-    for (int i=0; i<n_anneal; i++) {
-        t0 = seconds();
-        const count step = 1.0 / (count)n_anneal;
-        lambda += 2.0 * step;
-#pragma omp parallel for
-        for (int j=0; j<n_samplers; j++) {
-            random_state local_state;
-#pragma omp critical
-            {
-                local_state = random_split_state(&state);
-            }
-            text_alignment_sample(tas[j], &local_state, lambda, NULL, 0,
-                                  NULL, 1);
-        }
-        if (!quiet)
-            fprintf(stderr, "Sampling iteration %d (lambda = %.3f): %.3f s\n",
-                    i+1, lambda, seconds() - t0);
-    }
-
     t0 = seconds();
-    text_alignment_sample(tas[0], &state, 1e6, NULL, n_argmax,
-                          tas, n_samplers);
+    text_alignment_sample(tas[0], &state, NULL, tas, n_samplers);
     if (!quiet)
         fprintf(stderr, "Final argmax iteration: %.3f s\n", seconds() - t0);
 
     struct text_alignment *ta = tas[0];
 
-    if (vocab_filename != NULL) {
+    if (stats_filename != NULL && !reverse) {
         if (!quiet)
-            fprintf(stderr, "Writing vocabulary to %s\n", vocab_filename);
-        FILE *file = (!strcmp(vocab_filename, "-"))? stdout
-                     : fopen(vocab_filename, "w");
+            fprintf(stderr, "Writing alignment statistics to %s\n",
+                    stats_filename);
+        FILE *file = (!strcmp(stats_filename, "-"))? stdout
+                     : fopen(stats_filename, "w");
         text_alignment_write_vocab(ta, file);
         text_alignment_write_stats(ta, file);
         if (file != stdout) fclose(file);
@@ -1012,12 +907,11 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Writing alignments to %s\n", links_filename);
         FILE *file = (!strcmp(links_filename, "-"))? stdout
                      : fopen(links_filename, "w");
-        if (moses) text_alignment_write_moses(ta, file, reverse);
-        else text_alignment_write(ta, file);
+        text_alignment_write_moses(ta, file, reverse);
         if (file != stdout) fclose(file);
     }
 
-    if (scores_filename != NULL) {
+    if (scores_filename != NULL && !reverse) {
         count *scores = malloc(sizeof(count)*ta->source->n_sentences);
         for (size_t i=0; i<ta->source->n_sentences; i++)
             scores[i] = (count)0.0;
@@ -1026,13 +920,100 @@ int main(int argc, char *argv[]) {
                      : fopen(scores_filename, "w");
 
         if (!quiet) fprintf(stderr, "Computing sentence scores\n");
-        text_alignment_sample(ta, &state, 1.0, scores, 0, NULL, 1);
+        text_alignment_sample(ta, &state, scores, NULL, 1);
 
         for (size_t i=0; i<ta->source->n_sentences; i++)
             fprintf(file, "%g\n", -scores[i]);
 
         if (file != stdout) fclose(file);
         free(scores);
+    }
+
+
+}
+
+static void help(const char *filename) {
+    fprintf(stderr,
+"Usage: %s [-s source_input] [-t target_input] [-f forward_links_output] "
+"[-r reverse_links_output] [-S statistics_output] [-x scores_output] "
+"[-1 n_IBM1_iters] [-2 n_HMM_iters] [-3 n_fertility_iters] "
+"[-n n_samplers] [-N null_prior] [-q] -m model_type\n", filename);
+}
+
+int main(int argc, char *argv[]) {
+    double t0;
+    int opt;
+    char *source_filename = "-", *target_filename = "-",
+         *links_filename_fwd = NULL, *links_filename_rev = NULL,
+         *stats_filename = NULL, *scores_filename = NULL;
+    int n_iters[3];
+    int n_samplers = 1, quiet = 0, model = -1;
+    double null_prior = 0.2;
+
+    n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
+
+    omp_set_nested(1);
+
+    while ((opt = getopt(argc, argv, "s:t:f:r:S:x:1:2:3:n:qm:N:h"))
+            != -1)
+    {
+        switch(opt) {
+            case 's': source_filename = optarg; break;
+            case 't': target_filename = optarg; break;
+            case 'f': links_filename_fwd = optarg; break;
+            case 'r': links_filename_rev = optarg; break;
+            case 'S': stats_filename = optarg; break;
+            case 'x': scores_filename = optarg; break;
+            case '1': n_iters[0] = atoi(optarg); break;
+            case '2': n_iters[1] = atoi(optarg); break;
+            case '3': n_iters[2] = atoi(optarg); break;
+            case 'n': n_samplers = atoi(optarg); break;
+            case 'q': quiet = 1; break;
+            case 'm': model = atoi(optarg);
+                      if (model < 1 || model > 3) {
+                          fprintf(stderr, "Model must be 1, 2 or 3!\n");
+                          return 1;
+                      }
+                      break;
+            case 'N': null_prior = atof(optarg); break;
+            case 'h':
+            default:
+                help(argv[0]);
+                return 1;
+        }
+    }
+
+    if (model == -1) {
+        help(argv[0]);
+        return 1;
+    }
+
+    t0 = seconds();
+    struct text *source = text_read(source_filename);
+    struct text *target = text_read(target_filename);
+    if (source->n_sentences != target->n_sentences) {
+        fprintf(stderr, "Source text has %zd sentences but target has %zd\n",
+                source->n_sentences, target->n_sentences);
+        return 1;
+    }
+    if (!quiet) {
+        fprintf(stderr, "Read texts (%zd sentences): %.3f s\n",
+                source->n_sentences, seconds() - t0);
+        fprintf(stderr, "Vocabulary sizes are %"PRItoken" (source),"
+                        " %"PRItoken" (target)\n",
+                source->vocabulary_size, target->vocabulary_size);
+    }
+
+#pragma omp parallel for
+    for (int reverse=0; reverse<=1; reverse++) {
+        char *links_filename =
+            (reverse? links_filename_rev: links_filename_fwd);
+        if (links_filename != NULL ||
+                (!reverse && links_filename_fwd == NULL &&
+                 links_filename_rev == NULL))
+            align(reverse, source, target, model, null_prior, n_samplers,
+                  quiet, n_iters, links_filename, stats_filename,
+                  scores_filename);
     }
 
     return 0;

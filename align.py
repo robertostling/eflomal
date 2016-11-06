@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-from eflomal import read_text, align
+from eflomal import read_text, write_text, align
 
 import sys, argparse, random, os
+from tempfile import NamedTemporaryFile
 
 def main():
     parser = argparse.ArgumentParser(
@@ -17,17 +18,8 @@ def main():
         '--overwrite', dest='overwrite',
         action='store_true', help='Overwrite existing output files')
     parser.add_argument(
-        '-r', '--reverse', dest='reverse',
-        action='store_true', help='Align in the reverse direction')
-    parser.add_argument(
-        '-p', '--plain', dest='plain',
-        action='store_true', help='Use plain output format rather than Moses')
-    parser.add_argument(
         '--null-prior', dest='null_prior', default=0.2, metavar='X',
         type=float, help='Prior probability of NULL alignment')
-    parser.add_argument(
-        '--seed', dest='seed', default=None,
-        type=int, help='Random seed')
     parser.add_argument(
         '-m', '--model', dest='model', default=3, metavar='N',
         type=int, help='Model (1 = IBM1, 2 = IBM1+HMM, 3 = IBM1+HMM+fertility)')
@@ -54,13 +46,8 @@ def main():
         type=int, help='Number of HMM iterations (overrides --length)')
     parser.add_argument(
         '-3', '--fert-iters', dest='iters3', default=None, metavar='X',
-        type=int, help='Number of HMM+fertility iterations (overrides --length)')
-    parser.add_argument(
-        '-a', '--anneal', dest='annealing_iters', default=0, metavar='X',
-        type=int, help='Number of annealing iterations')
-    parser.add_argument(
-        '--argmax-samples', dest='argmax_samples', default=-1, metavar='X',
-        type=int, help='Number of per-sentence samples before argmax')
+        type=int,
+        help='Number of HMM+fertility iterations (overrides --length)')
     parser.add_argument(
         '--n-samplers', dest='n_samplers', default=3, metavar='X',
         type=int, help='Number of independent samplers to run')
@@ -71,16 +58,15 @@ def main():
         '-t', '--target', dest='target_filename', type=str, metavar='filename',
         help='Target text filename', required=True)
     parser.add_argument(
-        '-o', '--output', dest='links_filename', type=str, metavar='filename',
-        help='Filename to write alignments to', required=True)
+        '-f', '--forward-links', dest='links_filename_fwd', type=str,
+        metavar='filename',
+        help='Filename to write forward direction alignments to')
+    parser.add_argument(
+        '-r', '--reverse-links', dest='links_filename_rev', type=str,
+        metavar='filename',
+        help='Filename to write reverse direction alignments to')
 
     args = parser.parse_args()
-
-    #if args.verbose:
-    #    from pprint import pprint
-    #    pprint(vars(args), stream=sys.stderr)
-
-    seed = random.randint(0, 0x7ffffff) if args.seed is None else args.seed
 
     for filename in (args.source_filename, args.target_filename):
         if not os.path.exists(filename):
@@ -88,11 +74,13 @@ def main():
                   file=sys.stderr, flush=True)
             sys.exit(1)
 
-    if (not args.overwrite) and os.path.exists(args.links_filename):
-        print('ERROR: output file %s exists, will not overwrite!' % \
-                args.links_filename,
-              file=sys.stderr, flush=True)
-        sys.exit(1)
+    for filename in (args.links_filename_fwd, args.links_filename_rev):
+        if (not args.overwrite) and (filename is not None) \
+                and os.path.exists(filename):
+            print('ERROR: output file %s exists, will not overwrite!' % \
+                    filename,
+                  file=sys.stderr, flush=True)
+            sys.exit(1)
 
     if args.verbose:
         print('Reading source text from %s...' % args.source_filename,
@@ -100,8 +88,12 @@ def main():
     with open(args.source_filename, 'r', encoding='utf-8') as f:
         src_sents, src_index = read_text(
                 f, True, args.source_prefix_len, args.source_suffix_len)
+        n_src_sents = len(src_sents)
         src_voc_size = len(src_index)
         src_index = None
+        srcf = NamedTemporaryFile('wb')
+        write_text(srcf, tuple(src_sents), src_voc_size)
+        src_sents = None
 
     if args.verbose:
         print('Reading target text from %s...' % args.target_filename,
@@ -110,37 +102,41 @@ def main():
         trg_sents, trg_index = read_text(
                 f, True, args.target_prefix_len, args.target_suffix_len)
         trg_voc_size = len(trg_index)
+        n_trg_sents = len(trg_sents)
         trg_index = None
+        trgf = NamedTemporaryFile('wb')
+        write_text(trgf, tuple(trg_sents), trg_voc_size)
+        trg_sents = None
 
-    if len(src_sents) != len(trg_sents):
+    if n_src_sents != n_trg_sents:
         print('ERROR: number of sentences differ in input files (%d vs %d)' % (
-                len(src_sents), len(trg_sents)),
+                n_src_sents, n_trg_sents),
               file=sys.stderr, flush=True)
         sys.exit(1)
 
     iters = (args.iters1, args.iters2, args.iters3)
+    if any(x is None for x in iters[:args.model]):
+        iters = None
 
     if args.verbose:
-        print('Aligning %d sentences...' % len(src_sents),
+        print('Aligning %d sentences...' % n_src_sents,
               file=sys.stderr, flush=True)
 
-    if args.reverse:
-        src_sents, trg_sents = trg_sents, src_sents
-        src_voc_size, trg_voc_size = trg_voc_size, src_voc_size
-
-    src_sents = tuple(src_sents)
-    trg_sents = tuple(trg_sents)
-
-    align(src_sents, trg_sents, src_voc_size, trg_voc_size,
-          return_links=False, links_filename=args.links_filename,
-          model=args.model, n_iterations=iters if any(iters) else None,
+    align(srcf.name, trgf.name,
+          links_filename_fwd=args.links_filename_fwd,
+          links_filename_rev=args.links_filename_rev,
+          statistics_filename=None,
+          scores_filename=None,
+          model=args.model,
+          n_iterations=iters,
           n_samplers=args.n_samplers,
-          annealing_iterations=args.annealing_iters,
-          argmax_samples=args.argmax_samples,
-          reverse=args.reverse,
-          moses_format=not args.plain,
-          quiet=not args.verbose, rel_iterations=args.length,
+          quiet=not args.verbose,
+          rel_iterations=args.length,
+          null_prior=args.null_prior,
           use_gdb=args.debug)
+
+    srcf.close()
+    trgf.close()
 
 
 if __name__ == '__main__': main()

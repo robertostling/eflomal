@@ -59,11 +59,12 @@ Note that all timing figures below include alignments in both directions
 
 ### eflomal
 
-| English-Swedish | 1,862,426 | 0.126 | 2,899 | 793 |
-| English-French | 1,130,551 | 0.080 | 1,100 | 300 |
-| English-Inkutitut | 340,601 | 0.220 | 172 | 47 |
-| Romanian-English | 48,681 | 0.288 | 165 | 35 |
-| English-Hindi | 3,530 | 0.497 | 31 | 6 |
+| Languages | Sentences | AER | CPU time (s) | Real time (s) |
+| --------- | ---------:| ---:| ------------:| -------------:|
+| English-French | 1,130,551 | 0.081 | 1,232 | 337 |
+| English-Inkutitut | 340,601 | 0.203 | 161 | 44 |
+| Romanian-English | 48,681 | 0.298 | 159 | 33 |
+| English-Hindi | 3,530 | 0.467 | 31 | 6 |
 
 ### efmaral
 
