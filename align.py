@@ -11,6 +11,9 @@ def main():
         '-v', '--verbose', dest='verbose',
         action='store_true', help='Enable verbose output')
     parser.add_argument(
+        '--debug', dest='debug',
+        action='store_true', help='Enable gdb debugging of eflomal binary')
+    parser.add_argument(
         '--overwrite', dest='overwrite',
         action='store_true', help='Overwrite existing output files')
     parser.add_argument(
@@ -58,6 +61,9 @@ def main():
     parser.add_argument(
         '--argmax-samples', dest='argmax_samples', default=-1, metavar='X',
         type=int, help='Number of per-sentence samples before argmax')
+    parser.add_argument(
+        '--n-samplers', dest='n_samplers', default=4, metavar='X',
+        type=int, help='Number of independent samplers to run')
     parser.add_argument(
         '-s', '--source', dest='source_filename', type=str, metavar='filename',
         help='Source text filename', required=True)
@@ -128,11 +134,13 @@ def main():
     align(src_sents, trg_sents, src_voc_size, trg_voc_size,
           return_links=False, links_filename=args.links_filename,
           model=args.model, n_iterations=iters if any(iters) else None,
+          n_samplers=args.n_samplers,
           annealing_iterations=args.annealing_iters,
           argmax_samples=args.argmax_samples,
           reverse=args.reverse,
           moses_format=not args.plain,
-          quiet=not args.verbose, rel_iterations=args.length)
+          quiet=not args.verbose, rel_iterations=args.length,
+          use_gdb=args.debug)
 
 
 if __name__ == '__main__': main()

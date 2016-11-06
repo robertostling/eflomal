@@ -134,6 +134,7 @@ def align(
         tuple n_iterations=None,
         int annealing_iterations=0,
         int argmax_samples=-1,
+        int n_samplers=1,
         int clean_sentences=0,
         bool quiet=True,
         double rel_iterations=1.0,
@@ -161,7 +162,8 @@ def align(
                     on rel_iterations
     annealing_iterations -- number of simulated annealing iterations
     argmax_samples -- number of per-sentence samples before performing
-                         final argmax operation
+                      final argmax operation
+    n_samplers -- number of independent samplers to run
     clean_sentences -- if given, assume that only the first _clean_sentences_
                        sentences in the data are truly parallel, this is
                        useful mostly to append candidate sentence pairs to
@@ -174,11 +176,11 @@ def align(
     n_sents = len(src_sents)
 
     if n_iterations is None:
-        iters = max(1, int(rel_iterations*10000 / math.sqrt(len(src_sents))))
+        iters = max(1, int(rel_iterations*2500 / math.sqrt(len(src_sents))))
         iters4 = max(1, iters//4)
         if argmax_samples < 0:
-            argmax_samples = max(1, iters//2)
-            iters = max(1, iters-argmax_samples)
+            argmax_samples = 1 # max(1, iters//2)
+            iters = max(2, iters-argmax_samples)
         if model == 1:
             n_iterations = (iters, 0, 0)
         elif model == 2:
@@ -206,6 +208,7 @@ def align(
                 '-t', trgf.name,
                 '-n', str(clean_sentences),
                 '-g', str(argmax_samples),
+                '-i', str(n_samplers),
                 '-1', str(n_iterations[0])]
         if reverse: args.append('-r')
         if quiet: args.append('-q')

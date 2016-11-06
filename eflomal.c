@@ -200,7 +200,8 @@ inline static size_t get_fert_index(size_t e, int fert) {
 
 void text_alignment_sample(
         struct text_alignment *ta, random_state *state, count lambda,
-        count *sentence_scores, int n_samples) {
+        count *sentence_scores, int n_samples, struct text_alignment **tas,
+        int n_samplers) {
     const int argmax = (lambda > 100.0);
     const int model = ta->model;
     struct sentence **source_sentences = ta->source->sentences;
@@ -296,6 +297,23 @@ void text_alignment_sample(
         const size_t target_length = target_sentence->length;
         const token *source_tokens = source_sentence->tokens;
         const token *target_tokens = target_sentence->tokens;
+
+        int samples_left = n_samples-1;
+        int samplers_left = n_samplers-1;
+
+        if (argmax) {
+            for (size_t k=0; k<target_length*(source_length+1); k++)
+                acc_ps[k] = (count) 0.0;
+        }
+
+        // This is the head of a loop (look for gotos below) which iterates
+        // n_samples * n_samplers times, accumulating distributions from the
+        // independent samplers.
+resample:;
+        if (tas != NULL) ta = tas[samplers_left];
+        size_t acc_base = 0;
+        links = ta->sentence_links[sent];
+
         // if HMM model is used:
         if (model >= 2) {
             // initialize table of nearest non-NULL alignment to the right
@@ -314,15 +332,6 @@ void text_alignment_sample(
                 if (links[j] != NULL_LINK)
                     fert[links[j]]++;
         }
-
-        int samples_left = n_samples;
-        if (argmax) {
-            for (size_t k=0; k<target_length*(source_length+1); k++)
-                acc_ps[k] = (count) 0.0;
-        }
-
-resample:;
-        size_t acc_base = 0;
 
         // aa_jm1 will always contain the alignment of the nearest non-NULL
         // aligned word to the left (or -1 if there is no such word)
@@ -577,9 +586,15 @@ resample:;
         if (sentence_scores != NULL)
             sentence_scores[sent] /= (count)target_length;
 
-        if (argmax && samples_left) {
-            samples_left--;
-            goto resample;
+        if (argmax) {
+            if (samplers_left) {
+                samplers_left--;
+                goto resample;
+            } else if (samples_left) {
+                samplers_left = n_samplers-1;
+                samples_left--;
+                goto resample;
+            }
         }
     }
     if (argmax) free(acc_ps);
@@ -829,7 +844,7 @@ static void help(const char *filename) {
 "Usage: %s [-s source_input] [-t target_input] [-l links_output] "
 "[-v statistics_output] [-c scores_output] [-1 n_IBM1_iters] [-2 n_HMM_iters] "
 "[-3 n_fertility_iters] [-a n_annealing_iters] [-n n_clean_sentences] "
-"[-q] [-e] -m model_type\n", filename);
+"[-i n_independent_samplers][-q] [-e] -m model_type\n", filename);
 }
 
 int main(int argc, char *argv[]) {
@@ -840,13 +855,15 @@ int main(int argc, char *argv[]) {
     char *links_filename = NULL, *vocab_filename = NULL;
     char *scores_filename = NULL;
     int n_iters[3];
-    int n_anneal = 0, n_clean = 0, n_argmax = 1, quiet = 0, moses = 0, 
-        reverse = 0, model = -1;
+    int n_anneal = 0, n_clean = 0, n_samplers = 1, n_argmax = 1, quiet = 0,
+        moses = 0, reverse = 0, model = -1;
     double null_prior = 0.2;
 
     n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
 
-    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:g:n:rqm:p:he")) != -1) {
+    while ((opt = getopt(argc, argv, "s:t:l:v:c:1:2:3:a:g:n:i:rqm:p:he"))
+            != -1)
+    {
         switch(opt) {
             case 's': source_filename = optarg; break;
             case 't': target_filename = optarg; break;
@@ -859,6 +876,7 @@ int main(int argc, char *argv[]) {
             case 'a': n_anneal = atoi(optarg); break;
             case 'g': n_argmax = atoi(optarg); break;
             case 'n': n_clean = atoi(optarg); break;
+            case 'i': n_samplers = atoi(optarg); break;
             case 'q': quiet = 1; break;
             case 'r': reverse = 1; break;
             case 'e': moses = 1; break;
@@ -900,16 +918,26 @@ int main(int argc, char *argv[]) {
     }
 
     t0 = seconds();
-    struct text_alignment *ta = text_alignment_create(source, target);
+    struct text_alignment *tas[n_samplers];
+    for (int i=0; i<n_samplers; i++) {
+        tas[i] = text_alignment_create(source, target);
+        tas[i]->n_clean = n_clean;
+        tas[i]->null_prior = null_prior;
+    }
     if (!quiet)
-        fprintf(stderr, "Created alignment structure: %.3f s\n",
+        fprintf(stderr, "Created alignment structures: %.3f s\n",
                 seconds() - t0);
 
-    ta->n_clean = n_clean;
-    ta->null_prior = null_prior;
-
     t0 = seconds();
-    text_alignment_randomize(ta, &state);
+#pragma omp parallel for
+    for (int i=0; i<n_samplers; i++) {
+        random_state local_state;
+#pragma omp critical
+        {
+            local_state = random_split_state(&state);
+        }
+        text_alignment_randomize(tas[i], &local_state);
+    }
     if (!quiet)
         fprintf(stderr, "Randomized alignment: %.3f s\n", seconds() - t0);
 
@@ -918,13 +946,23 @@ int main(int argc, char *argv[]) {
             if (!quiet)
                 fprintf(stderr, "Aligning with model %d (%d iterations)\n",
                         m, n_iters[m-1]);
-            ta->model = m;
+                t0 = seconds();
 
-            t0 = seconds();
-            text_alignment_make_counts(ta);
+#pragma omp parallel for
+            for (int i=0; i<n_samplers; i++) {
+                random_state local_state;
+#pragma omp critical
+                {
+                    local_state = random_split_state(&state);
+                }
+                tas[i]->model = m;
 
-            for (int i=0; i<n_iters[m-1]; i++) {
-                text_alignment_sample(ta, &state, 1.0, NULL, 0);
+                text_alignment_make_counts(tas[i]);
+
+                for (int j=0; j<n_iters[m-1]; j++) {
+                    text_alignment_sample(tas[i], &local_state, 1.0, NULL, 0,
+                                          NULL, 1);
+                }
             }
             if (!quiet)
                 fprintf(stderr, "Done: %.3f s\n", seconds() - t0);
@@ -936,16 +974,28 @@ int main(int argc, char *argv[]) {
         t0 = seconds();
         const count step = 1.0 / (count)n_anneal;
         lambda += 2.0 * step;
-        text_alignment_sample(ta, &state, lambda, NULL, 0);
+#pragma omp parallel for
+        for (int j=0; j<n_samplers; j++) {
+            random_state local_state;
+#pragma omp critical
+            {
+                local_state = random_split_state(&state);
+            }
+            text_alignment_sample(tas[i], &local_state, lambda, NULL, 0,
+                                  NULL, 1);
+        }
         if (!quiet)
             fprintf(stderr, "Sampling iteration %d (lambda = %.3f): %.3f s\n",
                     i+1, lambda, seconds() - t0);
     }
 
     t0 = seconds();
-    text_alignment_sample(ta, &state, 1e6, NULL, n_argmax);
+    text_alignment_sample(tas[0], &state, 1e6, NULL, n_argmax,
+                          tas, n_samplers);
     if (!quiet)
         fprintf(stderr, "Final argmax iteration: %.3f s\n", seconds() - t0);
+
+    struct text_alignment *ta = tas[0];
 
     if (vocab_filename != NULL) {
         if (!quiet)
@@ -976,7 +1026,7 @@ int main(int argc, char *argv[]) {
                      : fopen(scores_filename, "w");
 
         if (!quiet) fprintf(stderr, "Computing sentence scores\n");
-        text_alignment_sample(ta, &state, 1.0, scores, 0);
+        text_alignment_sample(ta, &state, 1.0, scores, 0, NULL, 1);
 
         for (size_t i=0; i<ta->source->n_sentences; i++)
             fprintf(file, "%g\n", -scores[i]);

@@ -5,11 +5,9 @@ This is a word alignment tool based on
 [efmaral](https://github.com/robertostling/efmaral), with the following main
 differences:
  * More compact data structures are used, so memory requirements are much
-   lower (by orders of magnitude), at the cost of increasing the runtime by
-   about three times (which still compares favorably to e.g. `fast_align`).
- * Simulated annealing is used instead of sampling alignment variable
-   marginals, this also reduces memory consumption at the cost of some
-   accuracy.
+   lower (by orders of magnitude).
+ * The estimation of alignment variable marginals is done one sentence at a
+   time, which also saves a lot of memory at no detectable cost in accuracy.
 
 Technical details relevant to both `efmaral` and `eflomal` can be found in
 the following article:
@@ -52,23 +50,16 @@ details.
 This is a comparison between eflomal,
 [efmaral](https://github.com/robertostling/efmaral) and fast_align.
 
-As the tables below show, both efmaral and eflomal beat fast_align in both
-accuracy and CPU time by a comfortable margin. efmaral is somewhat more
-accurate and sometimes faster (in wall time, with enough CPU cores) than
-eflomal, but requires more RAM (hundreds of GB for large corpora).
+The difference between efmaral and eflomal is in part due to different default
+parameters, in particular the number of iterations and the number of
+independent samplers.
 
 Note that all timing figures below include alignments in both directions
 (run in parallel) and symmetrization.
 
 ### eflomal
 
-| Languages | Sentences | AER | CPU time (s) | Real time (s) |
-| --------- | ---------:| ---:| ------------:| -------------:|
-| English-Swedish | 1,862,426 | 0.138 | 1,160 | 628 |
-| English-French | 1,130,551 | 0.094 | 580 | 169 |
-| English-Inkutitut | 340,601 | 0.252 | 92 | 52 |
-| Romanian-English | 48,681 | 0.299 | 94 | 48 |
-| English-Hindi | 3,530 | 0.497 | 18 | 9 |
+TBD
 
 ### efmaral
 
