@@ -176,7 +176,8 @@ def align(
     n_sents = len(src_sents)
 
     if n_iterations is None:
-        iters = max(1, int(rel_iterations*2500 / math.sqrt(len(src_sents))))
+        iters = max(1, int(round(
+            rel_iterations*2500 / math.sqrt(len(src_sents)))))
         iters4 = max(1, iters//4)
         if argmax_samples < 0:
             argmax_samples = 1 # max(1, iters//2)
@@ -184,9 +185,9 @@ def align(
         if model == 1:
             n_iterations = (iters, 0, 0)
         elif model == 2:
-            n_iterations = (iters4, iters, 0)
+            n_iterations = (max(2, iters4), iters, 0)
         else:
-            n_iterations = (iters4, iters4, iters)
+            n_iterations = (max(2, iters4), iters4, iters)
     elif argmax_samples < 0:
         argmax_samples = 1
 
