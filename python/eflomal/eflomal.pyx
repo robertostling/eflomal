@@ -74,12 +74,15 @@ cpdef write_text(pyfile, tuple sents, int voc_size):
     fprintf(f, '%d %d\n', len(sents), voc_size)
     for sent in sents:
         n = len(sent)
-        i = 0
-        fprintf(f, '%d', n)
-        while i < n:
-            fprintf(f, ' %d', sent[i])
-            i += 1
-        fputc(10, f)
+        if n < 0x400:
+            i = 0
+            fprintf(f, '%d', n)
+            while i < n:
+                fprintf(f, ' %d', sent[i])
+                i += 1
+            fputc(10, f)
+        else:
+            fprintf(f, '0\n')
     fflush(f)
 
 
