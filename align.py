@@ -62,7 +62,7 @@ def main():
         '--argmax-samples', dest='argmax_samples', default=-1, metavar='X',
         type=int, help='Number of per-sentence samples before argmax')
     parser.add_argument(
-        '--n-samplers', dest='n_samplers', default=2, metavar='X',
+        '--n-samplers', dest='n_samplers', default=3, metavar='X',
         type=int, help='Number of independent samplers to run')
     parser.add_argument(
         '-s', '--source', dest='source_filename', type=str, metavar='filename',

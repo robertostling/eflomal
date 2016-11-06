@@ -177,7 +177,7 @@ def align(
 
     if n_iterations is None:
         iters = max(1, int(round(
-            rel_iterations*2500 / math.sqrt(len(src_sents)))))
+            rel_iterations*5000 / math.sqrt(len(src_sents)))))
         iters4 = max(1, iters//4)
         if argmax_samples < 0:
             argmax_samples = 1 # max(1, iters//2)
