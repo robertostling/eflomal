@@ -981,7 +981,7 @@ int main(int argc, char *argv[]) {
             {
                 local_state = random_split_state(&state);
             }
-            text_alignment_sample(tas[i], &local_state, lambda, NULL, 0,
+            text_alignment_sample(tas[j], &local_state, lambda, NULL, 0,
                                   NULL, 1);
         }
         if (!quiet)
