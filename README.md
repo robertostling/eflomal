@@ -22,7 +22,9 @@ To compile and install the C binary and the Python bindings:
     python3 setup.py install
 
 edit `Makefile` manually if you want to install somewhere other than the
-default `/usr/local/bin`.
+default `/usr/local/bin`. Note that the `align.py` script now uses the
+`eflomal` executable in the same directory as `align.py`, rather than in
+`$PATH`.
 
 
 ## Using

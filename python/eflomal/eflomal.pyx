@@ -133,7 +133,10 @@ def align(
         else:
             n_iterations = (max(2, iters4), iters4, iters)
 
-    args = ['eflomal',
+    executable = os.path.join(
+            os.path.dirname(os.path.realpath(sys.argv[0])),
+            'eflomal')
+    args = [executable,
             '-m', str(model),
             '-s', source_filename,
             '-t', target_filename,
