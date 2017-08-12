@@ -49,3 +49,9 @@ please see its
 [README](https://github.com/robertostling/efmaral/blob/master/README.md) for
 details.
 
+## Data format
+
+The `align.py` interface expects one sentence per line with space-separated
+tokens, similar to most word alignment software.
+
+
