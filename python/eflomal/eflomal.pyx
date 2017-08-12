@@ -82,7 +82,8 @@ cpdef write_text(pyfile, tuple sents, int voc_size):
                 i += 1
             fputc(10, f)
         else:
-            fprintf(f, '0\n')
+            fputc(48, f)
+            fputc(10, f)
     fflush(f)
 
 
