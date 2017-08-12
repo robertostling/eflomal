@@ -7,23 +7,24 @@
 
 if [ -z $4 ] ; then
     echo "Error: symmetrization argument missing!"
-    echo "You might want to try grow-diag-final-and"
+    echo "You might want to try 'grow-diag-final-and' (or 'none')"
     exit 1
 fi
-SYMMETRIZATION=$4
 
-#SYMMETRIZATION=grow-diag-final-and
-#if [ ! -z $4 ] ; then
-#    SYMMETRIZATION=$4
-#fi
+SYMMETRIZATION=$4
+OPTIONS="--verbose"
 
 DIR=`dirname $0`/..
-FWD=`mktemp`
-BWD=`mktemp`
-python3 $DIR/align.py --verbose --overwrite -s "$1" -t "$2" -o "$FWD" "${@:5}" &
-python3 $DIR/align.py --verbose --overwrite -r -s "$1" -t "$2" -o "$BWD" "${@:5}" &
-
-wait
-atools -c $SYMMETRIZATION -i "$FWD" -j "$BWD" >"$3"
-rm "$FWD" "$BWD"
+if [ "$SYMMETRIZATION" == "none" ]; then
+    python3 $DIR/align.py $OPTIONS --overwrite -s "$1" -t "$2" -f "$3" "${@:5}"
+elif [ "$SYMMETRIZATION" == "reverse" ]; then
+    python3 $DIR/align.py $OPTIONS --overwrite -s "$1" -t "$2" -r "$3" "${@:5}"
+else
+    FWD=`mktemp`
+    BWD=`mktemp`
+    python3 $DIR/align.py $OPTIONS --overwrite -s "$1" -t "$2" \
+        -f "$FWD" -r "$BWD" "${@:5}"
+    atools -c $SYMMETRIZATION -i "$FWD" -j "$BWD" >"$3"
+    rm -f "$FWD" "$BWD"
+fi
 
