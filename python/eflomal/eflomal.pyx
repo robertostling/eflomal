@@ -82,7 +82,8 @@ cpdef write_text(pyfile, tuple sents, int voc_size):
                 i += 1
             fputc(10, f)
         else:
-            fprintf(f, '0\n')
+            fputc(48, f)
+            fputc(10, f)
     fflush(f)
 
 
@@ -133,7 +134,10 @@ def align(
         else:
             n_iterations = (max(2, iters4), iters4, iters)
 
-    args = ['eflomal',
+    executable = os.path.join(
+            os.path.dirname(os.path.realpath(sys.argv[0])),
+            'eflomal')
+    args = [executable,
             '-m', str(model),
             '-s', source_filename,
             '-t', target_filename,
