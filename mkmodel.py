@@ -15,12 +15,18 @@ def compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
     counts = lil_matrix(len(voc_t.items()), len(voc_s.items()))
     return counts
 
-def make_voc(sentences, lowercase=False):
+def preprocess(sentences, lowercase):
+    processed = []
+    for sent in sentences:
+        if lowercase: sent = sent.lower()
+        processed.append(sent.split())
+    return processed
+
+def make_voc(sentences):
     voc = {}
     index = 0
     for sent in sentences:
-        if lowercase: sent = sent.lower()
-        for token in sent.split():
+        for token in sent:
             if token not in voc:
                 voc[token] = index
                 index += 1
@@ -167,9 +173,14 @@ def main():
 
     srcf.close()
     trgf.close()
+
+    # split and, if requested, lowercase tokens
+    src_sents = preprocess(src_sents, args.lowercase)
+    trg_sents = preprocess(trg_sents, args.lowercase)
     
-    voc_s = make_voc(src_sents, args.lowercase)
-    voc_t = make_voc(trg_sents, args.lowercase)
+    # extract token --> index hash table
+    voc_s = make_voc(src_sents)
+    voc_t = make_voc(trg_sents)
     
     if args.p_filename_fwd is not None:
         counts = compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, fwd_alignment_file.name, args.lowercase)
