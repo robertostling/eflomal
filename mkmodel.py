@@ -7,8 +7,24 @@ from tempfile import NamedTemporaryFile
 
 from scipy.sparse import lil_matrix
 
-def compute_counts():
-    fwd_alignment_file.name
+def compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, alignment_filename, lowercase):
+    counts = lil_matrix(len(voc_s.items()), len(voc_t.items()))
+    return counts
+
+def compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, alignment_filename, lowercase):
+    counts = lil_matrix(len(voc_t.items()), len(voc_s.items()))
+    return counts
+
+def make_voc(sentences, lowercase=False):
+    voc = {}
+    index = 0
+    for sent in sentences:
+        if lowercase: sent = sent.lower()
+        for token in sent.split():
+            if token not in voc:
+                voc[token] = index
+                index += 1
+    return voc
 
 def main():
     parser = argparse.ArgumentParser(
@@ -19,6 +35,9 @@ def main():
     parser.add_argument(
         '--debug', dest='debug',
         action='store_true', help='Enable gdb debugging of eflomal binary')
+    parser.add_argument(
+        '--no-lowercase', dest='lowercase',
+        action='store_false', default=True, help='Do not lowercase input text')
     parser.add_argument(
         '--overwrite', dest='overwrite',
         action='store_true', help='Overwrite existing output files')
@@ -97,7 +116,7 @@ def main():
               file=sys.stderr, flush=True)
     with open(args.source_filename, 'r', encoding='utf-8') as f:
         src_sents, src_index = read_text(
-                f, True, args.source_prefix_len, args.source_suffix_len)
+                f, args.lowercase, args.source_prefix_len, args.source_suffix_len)
         n_src_sents = len(src_sents)
         src_voc_size = len(src_index)
         src_index = None
@@ -109,7 +128,7 @@ def main():
               file=sys.stderr, flush=True)
     with open(args.target_filename, 'r', encoding='utf-8') as f:
         trg_sents, trg_index = read_text(
-                f, True, args.target_prefix_len, args.target_suffix_len)
+                f, args.lowercase, args.target_prefix_len, args.target_suffix_len)
         trg_voc_size = len(trg_index)
         n_trg_sents = len(trg_sents)
         trg_index = None
@@ -149,16 +168,16 @@ def main():
     srcf.close()
     trgf.close()
     
-    voc_s = make_voc(src_sents)
-    voc_t = make_voc(trg_sents)
+    voc_s = make_voc(src_sents, args.lowercase)
+    voc_t = make_voc(trg_sents, args.lowercase)
     
     if args.p_filename_fwd is not None:
-        counts = compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, fwd_alignment_file.name)
+        counts = compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, fwd_alignment_file.name, args.lowercase)
         p = compute_p(voc_s, voc_t, counts)
         save_p(p, voc_s, voc_t, args.p_filename_fwd)
     
     if args.p_filename_rev is not None:
-        counts = compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, rev_alignment_file.name)
+        counts = compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, rev_alignment_file.name, args.lowercase)
         p = compute_p(voc_t, voc_s, counts)
         save_p(p, voc_t, voc_s, args.p_filename_rev)
 
