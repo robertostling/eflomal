@@ -16,6 +16,12 @@ class IBM1():
         return self.p[s_index, t_index]
     
     def dump(self, file):
+        voc_s_rev = {}
+        for w, i in self.voc_s.items():
+            voc_s_rev[i] = w
+        voc_t_rev = {}
+        for w, i in self.voc_t.items():
+            voc_t_rev[i] = w
         X,Y = self.p.nonzero()
         for s,t in zip(X,Y):
-            file.write("{} ||| {} ||| {}\n".format(self.voc_s[s], self.voc_t[t], self.p[s,t]))
+            file.write("{}\t{}\t{}\n".format(voc_s_rev[s], voc_t_rev[t], self.p[s,t]))
