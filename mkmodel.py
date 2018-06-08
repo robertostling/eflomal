@@ -180,7 +180,7 @@ def compute_p(voc_s, voc_t, counts, word_counts):
     p = lil_matrix((len(voc_s.items()), len(voc_t.items())))
 
     nonzero_X, nonzero_Y = counts.nonzero()
-    nonzeros = list(zip(nonzero_X, nonzero_Y))
+    nonzeros = zip(nonzero_X, nonzero_Y)
 
     pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(nonzeros)).start()
     i = 0
