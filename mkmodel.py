@@ -217,8 +217,7 @@ def make_voc(sentences):
     pbar.finish()
     return voc
 
-def save_p(p, voc_t, voc_s, fname):
-    model = IBM1(p, voc_t, voc_s)
+def save_p(model, fname):
     with xopen(fname, "wb") as f:
         pickle.dump(model, f)
 
@@ -280,11 +279,19 @@ def main():
     parser.add_argument(
         '-f', '--forward-probabilities', dest='p_filename_fwd', type=str,
         metavar='filename',
-        help='Filename to write forward direction probabilities to')
+        help='Filename to write forward direction probabilities to, as pickle dump')
     parser.add_argument(
         '-r', '--reverse-probabilities', dest='p_filename_rev', type=str,
         metavar='filename',
-        help='Filename to write reverse direction probabilities to')
+        help='Filename to write reverse direction probabilities to, as pickle dump')
+    parser.add_argument(
+        '-F', '--forward-probabilities-human', dest='p_filename_fwd_h', type=str,
+        metavar='filename',
+        help='Filename to write forward direction probabilities to, as human readable dump')
+    parser.add_argument(
+        '-R', '--reverse-probabilities-human', dest='p_filename_rev_h', type=str,
+        metavar='filename',
+        help='Filename to write reverse direction probabilities to, as human readable dump')
 
     args = parser.parse_args()
 
@@ -385,7 +392,11 @@ def main():
         logger.info("Estimating forward probabilities...")
         p = compute_p(voc_s, voc_t, counts, s_counts)
         logger.info("Saving forward probabilities...")
-        save_p(p, voc_s, voc_t, args.p_filename_fwd)
+        model = IBM1(p, voc_s, voc_t)
+        save_p(model, args.p_filename_fwd)
+        if args.p_filename_fwd_h is not None:
+            with xopen(args.p_filename_fwd_h, "w") as f:
+                model.dump(f)
     
     if args.p_filename_rev is not None:
         logger.info("Estimating reverse counts...")
@@ -393,7 +404,11 @@ def main():
         logger.info("Estimating reverse probabilities...")
         p = compute_p(voc_t, voc_s, counts, t_counts)
         logger.info("Saving reverse probabilities...")
-        save_p(p, voc_t, voc_s, args.p_filename_rev)
+        model = IBM1(p, voc_t, voc_s)
+        save_p(model, args.p_filename_rev)
+        if args.p_filename_rev_h is not None:
+            with xopen(args.p_filename_rev_h, "w") as f:
+                model.dump(f)
 
     fwd_alignment_file.close()
     rev_alignment_file.close()
