@@ -1,7 +1,11 @@
 # eflomal
 Efficient Low-Memory Aligner
 
-This is a word alignment tool based on
+This work is a fork of Robert Ösling's [eflomal](https://github.com/robertostling/eflomal) with a few fixes and additional features:
+* removed `-lrt` from `LDFLAGS` to allow linking on Max OS using `gcc` (***not*** `clang`)
+* `mkmodel.py` script for computing translation probabilities directly from a parallel corpus; this first computes alignment using `eflomal` then derives probabilities from it
+
+`eflomal` is a word alignment tool based on
 [efmaral](https://github.com/robertostling/efmaral), with the following main
 differences:
  * More compact data structures are used, so memory requirements are much
@@ -26,6 +30,12 @@ default `/usr/local/bin`. Note that the `align.py` script now uses the
 `eflomal` executable in the same directory as `align.py`, rather than in
 `$PATH`.
 
+On mac you will need to compile using `gcc`:
+```
+    brew install gcc
+    export CC=/usr/local/bin/gcc-8
+```
+Then proceed to build and install normally.
 
 ## Using
 
