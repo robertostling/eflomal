@@ -3,9 +3,8 @@
 from eflomal import read_text, write_text, align
 from ibm1 import IBM1
 
-import sys, argparse, os
+import sys, argparse, os, gzip, pickle
 from tempfile import NamedTemporaryFile
-import pickle
 
 from scipy.sparse import lil_matrix
 from numpy import zeros
@@ -25,20 +24,20 @@ class XFile():
         self.file.close()
     
     def write(self, line):
-        if isinstance(self.file, gzip.GzipFile):
+        if isinstance(self.file, gzip.GzipFile) and hasattr(line, "encode"):
             return self.file.write(line.encode(self.encoding))
         else:
             return self.file.write(line)
     
     def read(self, size=-1):
-        line = f.read(size)
+        line = self.file.read(size)
         try:
             return line.decode() if type(line)==bytes else line
         except:
             return line
     
-    def readline(self, size):
-        line = f.readline(size)
+    def readline(self, size=-1):
+        line = self.file.readline(size)
         try:
             return line.decode(self.encoding) if type(line)==bytes else line
         except:
@@ -52,7 +51,7 @@ class XFile():
 
 
 def xopen(fname, mode="r", encoding="utf8"):
-    if fname.endswith(".gz"):
+    if fname.endswith(".gz") or mode.endswith("b"):
         return XFile(gzip.open(fname, mode=mode), encoding)
     else:
         return XFile(open(fname, mode, encoding=encoding), encoding)
@@ -62,19 +61,18 @@ def compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
     counts = lil_matrix((len(voc_s.items()), len(voc_t.items())))
     s_counts = zeros(len(voc_s.items()))
     
-    with xopen(alignment_filename , "r") as f:
+    with xopen(alignment_filename , "r") as afile:
         i = 0
         s = src_sents[i]
         t = trg_sents[i]
-        aline = f.read()
+        aline = afile.readline()
         while aline != "":
             a = [(int(x), int(y)) for x,y in [apair.split("-") for apair in aline.split()]]
-            
             for s_i, t_i in a:
                 token_s = s[s_i]
                 token_t = t[t_i]
                 token_s_id = voc_s[token_s]
-                token_t_id = voc_s[token_t]
+                token_t_id = voc_t[token_t]
                 counts[token_s_id, token_t_id] += 1
                 s_counts[token_s_id] += 1
             
@@ -82,20 +80,20 @@ def compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
             if i < len(src_sents):
                 s = src_sents[i]
                 t = trg_sents[i]
-            aline = f.read()
+            aline = afile.readline()
             
     return counts, s_counts
 
 def compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, alignment_filename, lowercase):
     
-    counts = lil_matrix(len(voc_t.items()), len(voc_s.items()))
+    counts = lil_matrix((len(voc_t.items()), len(voc_s.items())))
     t_counts = zeros(len(voc_t.items()))
 
-    with xopen(alignment_filename, "r") as f:
+    with xopen(alignment_filename, "r") as afile:
         i = 0
         s = src_sents[i]
         t = trg_sents[i]
-        aline = f.read()
+        aline = afile.readline()
         while aline!="":
             a = [(int(x), int(y)) for x, y in [apair.split("-") for apair in aline.split()]]
         
@@ -103,7 +101,7 @@ def compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
                 token_s = s[s_i]
                 token_t = t[t_i]
                 token_s_id = voc_s[token_s]
-                token_t_id = voc_s[token_t]
+                token_t_id = voc_t[token_t]
                 counts[token_t_id, token_s_id] += 1
                 t_counts[token_t_id] += 1
         
@@ -111,19 +109,17 @@ def compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
             if i<len(src_sents):
                 s = src_sents[i]
                 t = trg_sents[i]
-            aline = f.read()
+            aline = afile.readline()
 
     return counts, t_counts
 
 def compute_p(voc_s, voc_t, counts, word_counts):
-    p = lil_matrix(len(voc_s.items()), len(voc_t.items()))
+    p = lil_matrix((len(voc_s.items()), len(voc_t.items())))
     
     for s_id in range(len(voc_s.items())):
         if word_counts[s_id] > 0:
             for t_id in range(len(voc_t.items())):
                 p[s_id, t_id] = counts[s_id, t_id] / word_counts[s_id]
-        else:
-            p[s_id,:] = zeros(len(voc_t.items()))
     
     return p
 
@@ -146,7 +142,7 @@ def make_voc(sentences):
 
 def save_p(p, voc_t, voc_s, fname):
     model = IBM1(p, voc_t, voc_s)
-    with xopen(fname, "w") as f:
+    with xopen(fname, "wb") as f:
         pickle.dump(model, f)
 
 def main():
@@ -245,6 +241,7 @@ def main():
         src_index = None
         srcf = NamedTemporaryFile('wb')
         write_text(srcf, tuple(src_sents), src_voc_size)
+        src_sents = None
 
     if args.verbose:
         print('Reading target text from %s...' % args.target_filename,
@@ -257,6 +254,7 @@ def main():
         trg_index = None
         trgf = NamedTemporaryFile('wb')
         write_text(trgf, tuple(trg_sents), trg_voc_size)
+        trg_sents = None
 
     if n_src_sents != n_trg_sents:
         print('ERROR: number of sentences differ in input files (%d vs %d)' % (
@@ -292,8 +290,9 @@ def main():
     trgf.close()
 
     # split and, if requested, lowercase tokens
-    src_sents = preprocess(src_sents, args.lowercase)
-    trg_sents = preprocess(trg_sents, args.lowercase)
+    with open(args.source_filename, 'r', encoding='utf-8') as fsrc, open(args.target_filename, 'r', encoding='utf-8') as ftgt :
+        src_sents = preprocess(fsrc.readlines(), args.lowercase)
+        trg_sents = preprocess(ftgt.readlines(), args.lowercase)
     
     # extract token --> index hash table
     voc_s = make_voc(src_sents)
