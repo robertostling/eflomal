@@ -3,11 +3,66 @@
 from eflomal import read_text, write_text, align
 from ibm1 import IBM1
 
-import sys, argparse, os, gzip, pickle
+import sys, argparse, os, gzip, pickle, logging
 from tempfile import NamedTemporaryFile
+from progressbar import ProgressBar, Percentage, Bar
 
 from scipy.sparse import lil_matrix
 from numpy import zeros
+
+def log_levels_mapping(verbose):
+    if verbose==0: return logging.WARNING
+    if verbose==1: return logging.INFO
+    if verbose>=2: return logging.DEBUG
+
+
+logger = logging.getLogger(__name__)
+handler = logging.StreamHandler()
+logger.addHandler(handler)
+
+
+def error(msg, code=1):
+    """Log an error message and exit with given code (default: 1)."""
+    logger.error(msg)
+    exit(code)
+
+
+class bcolors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    ORANGE = '\033[38;5;214m'
+    RED = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+def header(text):
+    return bcolors.HEADER+text+bcolors.ENDC
+
+def blue(text):
+    return bcolors.BLUE+text+bcolors.ENDC
+
+def green(text):
+    return bcolors.GREEN+text+bcolors.ENDC
+
+def yellow(text):
+    return bcolors.YELLOW+text+bcolors.ENDC
+
+def orange(text):
+    return bcolors.ORANGE+text+bcolors.ENDC
+
+def red(text):
+    return bcolors.RED+text+bcolors.ENDC
+
+def bold(text):
+    return bcolors.BOLD+text+bcolors.ENDC
+
+def underline(text):
+    return bcolors.UNDERLINE+text+bcolors.ENDC
+
 
 class XFile():
     def __init__(self, f, encoding="utf8"):
@@ -62,6 +117,7 @@ def compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
     s_counts = zeros(len(voc_s.items()))
     
     with xopen(alignment_filename , "r") as afile:
+        pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(src_sents)).start()
         i = 0
         s = src_sents[i]
         t = trg_sents[i]
@@ -77,10 +133,13 @@ def compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
                 s_counts[token_s_id] += 1
             
             i += 1
+            pbar.update(i)
             if i < len(src_sents):
                 s = src_sents[i]
                 t = trg_sents[i]
             aline = afile.readline()
+
+    pbar.finish()
             
     return counts, s_counts
 
@@ -90,6 +149,7 @@ def compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
     t_counts = zeros(len(voc_t.items()))
 
     with xopen(alignment_filename, "r") as afile:
+        pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(src_sents)).start()
         i = 0
         s = src_sents[i]
         t = trg_sents[i]
@@ -106,38 +166,55 @@ def compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, alignment_filename, l
                 t_counts[token_t_id] += 1
         
             i += 1
+            pbar.update(i)
             if i<len(src_sents):
                 s = src_sents[i]
                 t = trg_sents[i]
             aline = afile.readline()
 
+    pbar.finish()
+    
     return counts, t_counts
 
 def compute_p(voc_s, voc_t, counts, word_counts):
     p = lil_matrix((len(voc_s.items()), len(voc_t.items())))
+
+    nonzero_X, nonzero_Y = counts.nonzero()
+    nonzeros = list(zip(nonzero_X, nonzero_Y))
+
+    pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(nonzeros)).start()
+    i = 0
     
-    for s_id in range(len(voc_s.items())):
-        if word_counts[s_id] > 0:
-            for t_id in range(len(voc_t.items())):
-                p[s_id, t_id] = counts[s_id, t_id] / word_counts[s_id]
+    for s_id, t_id in nonzeros:
+        p[s_id, t_id] = counts[s_id, t_id] / word_counts[s_id]
+        i += 1
+        pbar.update(i)
+
+    pbar.finish()
     
     return p
 
 def preprocess(sentences, lowercase):
+    pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(sentences)).start()
     processed = []
     for sent in sentences:
         if lowercase: sent = sent.lower()
         processed.append(sent.split())
+        pbar.update(len(processed))
+    pbar.finish()
     return processed
 
 def make_voc(sentences):
+    pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(sentences)).start()
     voc = {}
     index = 0
-    for sent in sentences:
+    for i, sent in enumerate(sentences):
         for token in sent:
             if token not in voc:
                 voc[token] = index
                 index += 1
+        pbar.update(i + 1)
+    pbar.finish()
     return voc
 
 def save_p(p, voc_t, voc_s, fname):
@@ -150,7 +227,7 @@ def main():
         description='mkmodel.py: compute IBM-1 translation probabilties using eflomal, the efficient low-memory aligner')
     parser.add_argument(
         '-v', '--verbose', dest='verbose',
-        action='store_true', help='Enable verbose output')
+        action="count", default=0, help='Enable verbose output')
     parser.add_argument(
         '--debug', dest='debug',
         action='store_true', help='Enable gdb debugging of eflomal binary')
@@ -210,6 +287,8 @@ def main():
         help='Filename to write reverse direction probabilities to')
 
     args = parser.parse_args()
+
+    logger.setLevel(log_levels_mapping(args.verbose))
 
     if args.p_filename_fwd is None and args.p_filename_rev is None:
         print('ERROR: no file to save probabilities (-f/-r), will do nothing.',
@@ -290,22 +369,30 @@ def main():
     trgf.close()
 
     # split and, if requested, lowercase tokens
+    logger.info("Preprocessing sentences for probability estimation...")
     with open(args.source_filename, 'r', encoding='utf-8') as fsrc, open(args.target_filename, 'r', encoding='utf-8') as ftgt :
         src_sents = preprocess(fsrc.readlines(), args.lowercase)
         trg_sents = preprocess(ftgt.readlines(), args.lowercase)
     
     # extract token --> index hash table
+    logger.info("Extracting vocabulary...")
     voc_s = make_voc(src_sents)
     voc_t = make_voc(trg_sents)
     
     if args.p_filename_fwd is not None:
+        logger.info("Estimating forward counts...")
         counts, s_counts = compute_counts_fwd(voc_s, voc_t, src_sents, trg_sents, fwd_alignment_file.name, args.lowercase)
+        logger.info("Estimating forward probabilities...")
         p = compute_p(voc_s, voc_t, counts, s_counts)
+        logger.info("Saving forward probabilities...")
         save_p(p, voc_s, voc_t, args.p_filename_fwd)
     
     if args.p_filename_rev is not None:
+        logger.info("Estimating reverse counts...")
         counts, t_counts = compute_counts_rev(voc_s, voc_t, src_sents, trg_sents, rev_alignment_file.name, args.lowercase)
+        logger.info("Estimating reverse probabilities...")
         p = compute_p(voc_t, voc_s, counts, t_counts)
+        logger.info("Saving reverse probabilities...")
         save_p(p, voc_t, voc_s, args.p_filename_rev)
 
     fwd_alignment_file.close()
