@@ -14,3 +14,8 @@ class IBM1():
         if s_index < 0 or t_index < 0: return 0.0
         
         return self.p[s_index, t_index]
+    
+    def dump(self, file):
+        X,Y = self.p.nonzero()
+        for s,t in zip(X,Y):
+            file.write("{} ||| {} ||| {}\n".format(self.voc_s[s], self.voc_t[t], self.p[s,t]))
