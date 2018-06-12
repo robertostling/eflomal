@@ -28,14 +28,14 @@ class IBM1():
             file.write("{}\t{}\t{}\n".format(voc_s_rev[s], voc_t_rev[t], self.p[s,t]))
     
     def estimate(self, S, T):
+        if len(S) == 0:
+            return 0.0
         p = 1.0
         for t in T:
             partial = 0.0
             for s in S:
                 partial += self.get(s, t)
             p = p * partial
-        if len(S) == 0:
-            return 0.0
         return p / len(S)
     
     def estimate_normalized(self, S, T):
