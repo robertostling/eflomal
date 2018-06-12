@@ -69,6 +69,16 @@ class XFile():
         self.encoding = encoding
         self.file = f
     
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        line = self.readline()
+        if line == "":
+            raise StopIteration
+        else:
+            return line
+    
     def __enter__(self):
         return self
     
@@ -87,22 +97,26 @@ class XFile():
     def read(self, size=-1):
         line = self.file.read(size)
         try:
-            return line.decode() if type(line)==bytes else line
+            return line.decode(encoding = self.encoding) if type(line) == bytes else line
         except:
             return line
     
     def readline(self, size=-1):
         line = self.file.readline(size)
         try:
-            return line.decode(self.encoding) if type(line)==bytes else line
+            return line.decode(self.encoding) if type(line) == bytes else line
         except:
             return line
     
     def readlines(self, hint=-1):
+        lines = self.file.readlines(hint)
         if isinstance(self.file, gzip.GzipFile):
-            return [l.decode(self.encoding) for l in self.file.readlines(hint)]
+            try:
+                return [l.decode(self.encoding) for l in lines]
+            except:
+                return lines
         else:
-            return self.file.readlines(hint)
+            return lines
 
 
 def xopen(fname, mode="r", encoding="utf8"):
@@ -319,7 +333,7 @@ def main():
     if args.verbose:
         print('Reading source text from %s...' % args.source_filename,
               file=sys.stderr, flush=True)
-    with open(args.source_filename, 'r', encoding='utf-8') as f:
+    with xopen(args.source_filename, 'r', encoding='utf-8') as f:
         src_sents, src_index = read_text(
                 f, args.lowercase, args.source_prefix_len, args.source_suffix_len)
         n_src_sents = len(src_sents)
@@ -332,7 +346,7 @@ def main():
     if args.verbose:
         print('Reading target text from %s...' % args.target_filename,
               file=sys.stderr, flush=True)
-    with open(args.target_filename, 'r', encoding='utf-8') as f:
+    with xopen(args.target_filename, 'r', encoding='utf-8') as f:
         trg_sents, trg_index = read_text(
                 f, args.lowercase, args.target_prefix_len, args.target_suffix_len)
         trg_voc_size = len(trg_index)
@@ -377,7 +391,7 @@ def main():
 
     # split and, if requested, lowercase tokens
     logger.info("Preprocessing sentences for probability estimation...")
-    with open(args.source_filename, 'r', encoding='utf-8') as fsrc, open(args.target_filename, 'r', encoding='utf-8') as ftgt :
+    with xopen(args.source_filename, 'r', encoding='utf-8') as fsrc, xopen(args.target_filename, 'r', encoding='utf-8') as ftgt :
         src_sents = preprocess(fsrc.readlines(), args.lowercase)
         trg_sents = preprocess(ftgt.readlines(), args.lowercase)
     
