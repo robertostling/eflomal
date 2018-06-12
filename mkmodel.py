@@ -97,20 +97,20 @@ class XFile():
     def read(self, size=-1):
         line = self.file.read(size)
         try:
-            return line.decode(encoding = self.encoding) if type(line) == bytes else line
+            return line.decode(encoding = self.encoding) if type(line) == bytes and not self.mode.endswith("b") else line
         except:
             return line
     
     def readline(self, size=-1):
         line = self.file.readline(size)
         try:
-            return line.decode(self.encoding) if type(line) == bytes else line
+            return line.decode(self.encoding) if type(line) == bytes and not self.mode.endswith("b") else line
         except:
             return line
     
     def readlines(self, hint=-1):
         lines = self.file.readlines(hint)
-        if isinstance(self.file, gzip.GzipFile):
+        if isinstance(self.file, gzip.GzipFile) and not self.mode.endswith("b"):
             try:
                 return [l.decode(self.encoding) for l in lines]
             except:
