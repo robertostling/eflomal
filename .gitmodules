@@ -1,0 +1,3 @@
+[submodule "convenience"]
+	path = convenience
+	url = git@gitlab.com:sylvainraybaud/convenience.git
