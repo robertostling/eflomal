@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from math import pow
 
 class IBM1():
     def __init__(self, p, voc_s, voc_t):
@@ -25,3 +26,21 @@ class IBM1():
         X,Y = self.p.nonzero()
         for s,t in zip(X,Y):
             file.write("{}\t{}\t{}\n".format(voc_s_rev[s], voc_t_rev[t], self.p[s,t]))
+    
+    def estimate(self, S, T):
+        p = 1.0
+        for t in T:
+            partial = 0.0
+            for s in S:
+                partial += self.get(s, t)
+            p = p * partial
+        if len(S) == 0:
+            return 0.0
+        return p / len(S)
+    
+    def estimate_normalized(self, S, T):
+        p = self.estimate(S, T)
+        if len(T) == 0:
+            return p
+        else:
+            return pow(p, 1/len(T))
