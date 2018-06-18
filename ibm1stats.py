@@ -2,9 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import logging
-import json
-import gzip
 import pickle
 
 from convenience import xopen
