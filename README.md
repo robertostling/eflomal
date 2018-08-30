@@ -47,10 +47,34 @@ please see its
 [README](https://github.com/robertostling/efmaral/blob/master/README.md) for
 details.
 
-## Data format
+## Input data format
 
 The `align.py` interface expects one sentence per line with space-separated
 tokens, similar to most word alignment software.
+
+## Output data format
+
+The alignment output contains the same number of lines as the input files,
+where each line contains pairs of indexes. For instance, if the source input
+contains the following:
+
+    a black cat
+
+and the target input is the following:
+
+    kuro neku
+
+the correct output would be:
+
+    1-0 2-1
+
+That is, `1-0` indicates token 1 of the source (black) is aligned to token 0
+of the target (kuro), and `2-1` that token 2 of the source (cat) is aligned to
+token 1 of the target (neko). `NULL` alignments are not present in the output.
+
+Note that the forward and reverse alignments both use source-target order, so
+the output can be fed directly to `atools` (see `scripts/align_symmetrize.sh`
+for an example).
 
 ## Performance
 
