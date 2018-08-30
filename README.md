@@ -76,6 +76,9 @@ Note that the forward and reverse alignments both use source-target order, so
 the output can be fed directly to `atools` (see `scripts/align_symmetrize.sh`
 for an example).
 
+In case you made a mistake with the direction, you can fix it afterwards with
+`scripts/reverse_moses.py`.
+
 ## Performance
 
 This is a comparison between eflomal,
