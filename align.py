@@ -2,7 +2,7 @@
 
 from eflomal import read_text, write_text, align
 
-import sys, argparse, random, os
+import sys, argparse, random, os, io
 from tempfile import NamedTemporaryFile
 
 def main():
@@ -53,10 +53,13 @@ def main():
         type=int, help='Number of independent samplers to run')
     parser.add_argument(
         '-s', '--source', dest='source_filename', type=str, metavar='filename',
-        help='Source text filename', required=True)
+        help='Source text filename')
     parser.add_argument(
         '-t', '--target', dest='target_filename', type=str, metavar='filename',
-        help='Target text filename', required=True)
+        help='Target text filename')
+    parser.add_argument(
+        '-i', '--input', dest='joint_filename', type=str, metavar='filename',
+        help='fast_align style ||| separated file')
     parser.add_argument(
         '-f', '--forward-links', dest='links_filename_fwd', type=str,
         metavar='filename',
@@ -68,7 +71,14 @@ def main():
 
     args = parser.parse_args()
 
-    for filename in (args.source_filename, args.target_filename):
+    if not (args.joint_filename or (args.source_filename and
+        args.target_filename)):
+        print('ERROR: need to specify either -s and -t, or -i',
+                file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    for filename in ((args.joint_filename,) if args.joint_filename else 
+                     (args.source_filename, args.target_filename)):
         if not os.path.exists(filename):
             print('ERROR: input file %s does not exist!' % filename,
                   file=sys.stderr, flush=True)
@@ -82,37 +92,82 @@ def main():
                   file=sys.stderr, flush=True)
             sys.exit(1)
 
-    if args.verbose:
-        print('Reading source text from %s...' % args.source_filename,
-              file=sys.stderr, flush=True)
-    with open(args.source_filename, 'r', encoding='utf-8') as f:
-        src_sents, src_index = read_text(
-                f, True, args.source_prefix_len, args.source_suffix_len)
-        n_src_sents = len(src_sents)
-        src_voc_size = len(src_index)
-        src_index = None
-        srcf = NamedTemporaryFile('wb')
-        write_text(srcf, tuple(src_sents), src_voc_size)
-        src_sents = None
+    if args.joint_filename:
+        if args.verbose:
+            print('Reading source/target sentences from %s...' %
+                    args.joint_filename,
+                  file=sys.stderr, flush=True)
+        with open(args.joint_filename, 'r', encoding='utf-8') as f:
+            src_sents_text = []
+            trg_sents_text = []
+            for i, line in enumerate(f):
+                fields = line.strip().split(' ||| ')
+                if len(fields) != 2:
+                    print('ERROR: line %d of %s does not contain a single |||'
+                          ' separator, or sentence(s) are empty!' % (
+                              i+1, args.joint_filename),
+                          file=sys.stderr, flush=True)
+                    sys.exit(1)
+                src_sents_text.append(fields[0])
+                trg_sents_text.append(fields[1])
+            src_text = '\n'.join(src_sents_text) + '\n'
+            trg_text = '\n'.join(trg_sents_text) + '\n'
+            src_sents_text = None
+            trg_sents_text = None
 
-    if args.verbose:
-        print('Reading target text from %s...' % args.target_filename,
-              file=sys.stderr, flush=True)
-    with open(args.target_filename, 'r', encoding='utf-8') as f:
-        trg_sents, trg_index = read_text(
-                f, True, args.target_prefix_len, args.target_suffix_len)
-        trg_voc_size = len(trg_index)
-        n_trg_sents = len(trg_sents)
-        trg_index = None
-        trgf = NamedTemporaryFile('wb')
-        write_text(trgf, tuple(trg_sents), trg_voc_size)
-        trg_sents = None
+        with io.StringIO(src_text) as f:
+            src_sents, src_index = read_text(
+                    f, True, args.source_prefix_len, args.source_suffix_len)
+            n_src_sents = len(src_sents)
+            src_voc_size = len(src_index)
+            src_index = None
+            srcf = NamedTemporaryFile('wb')
+            write_text(srcf, tuple(src_sents), src_voc_size)
+            src_sents = None
+            src_text = None
 
-    if n_src_sents != n_trg_sents:
-        print('ERROR: number of sentences differ in input files (%d vs %d)' % (
-                n_src_sents, n_trg_sents),
-              file=sys.stderr, flush=True)
-        sys.exit(1)
+        with io.StringIO(trg_text) as f:
+            trg_sents, trg_index = read_text(
+                    f, True, args.target_prefix_len, args.target_suffix_len)
+            trg_voc_size = len(trg_index)
+            n_trg_sents = len(trg_sents)
+            trg_index = None
+            trgf = NamedTemporaryFile('wb')
+            write_text(trgf, tuple(trg_sents), trg_voc_size)
+            trg_sents = None
+            trg_text = None
+    else:
+        if args.verbose:
+            print('Reading source text from %s...' % args.source_filename,
+                  file=sys.stderr, flush=True)
+        with open(args.source_filename, 'r', encoding='utf-8') as f:
+            src_sents, src_index = read_text(
+                    f, True, args.source_prefix_len, args.source_suffix_len)
+            n_src_sents = len(src_sents)
+            src_voc_size = len(src_index)
+            src_index = None
+            srcf = NamedTemporaryFile('wb')
+            write_text(srcf, tuple(src_sents), src_voc_size)
+            src_sents = None
+
+        if args.verbose:
+            print('Reading target text from %s...' % args.target_filename,
+                  file=sys.stderr, flush=True)
+        with open(args.target_filename, 'r', encoding='utf-8') as f:
+            trg_sents, trg_index = read_text(
+                    f, True, args.target_prefix_len, args.target_suffix_len)
+            trg_voc_size = len(trg_index)
+            n_trg_sents = len(trg_sents)
+            trg_index = None
+            trgf = NamedTemporaryFile('wb')
+            write_text(trgf, tuple(trg_sents), trg_voc_size)
+            trg_sents = None
+
+        if n_src_sents != n_trg_sents:
+            print('ERROR: number of sentences differ in input files (%d vs %d)' % (
+                    n_src_sents, n_trg_sents),
+                  file=sys.stderr, flush=True)
+            sys.exit(1)
 
     iters = (args.iters1, args.iters2, args.iters3)
     if any(x is None for x in iters[:args.model]):
