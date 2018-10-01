@@ -88,6 +88,8 @@ struct text_alignment {
     const struct text *target;
     link_t **sentence_links;
     link_t *buf;
+    struct map_token_u32 *source_prior;
+    count *source_prior_sum;
     struct map_token_u32 *source_count;
     count *inv_source_count_sum;
     count jump_counts[JUMP_ARRAY_LEN];
@@ -106,6 +108,12 @@ double seconds(void) {
 }
 
 void text_alignment_free(struct text_alignment *ta) {
+    if (ta->source_prior != NULL) {
+        for (size_t i=0; i<ta->source->vocabulary_size; i++)
+            map_token_u32_clear(ta->source_prior + i);
+        free(ta->source_prior);
+        free(ta->source_prior_sum);
+    }
     for (size_t i=0; i<ta->source->vocabulary_size; i++)
         map_token_u32_clear(ta->source_count + i);
     free(ta->source_count);
@@ -164,10 +172,30 @@ void text_alignment_write_vocab(const struct text_alignment *ta, FILE *file) {
 }
 
 void text_alignment_write_stats(const struct text_alignment *ta, FILE *file) {
-    fprintf(file, "%d\n", JUMP_ARRAY_LEN);
-    for (size_t i=0; i<JUMP_ARRAY_LEN; i++) {
-        fprintf(file, "%d\n", (int)roundf(ta->jump_counts[i]-JUMP_ALPHA));
+    // Total number of non-zero (e, f) pairs
+    size_t n_priors = 0;
+
+    for (size_t e=0; e<ta->source->vocabulary_size; e++)
+        n_priors += ta->source_count[e].n_items;
+
+    fprintf(file, "%"PRItoken" %"PRItoken" %zd\n",
+            ta->source->vocabulary_size, ta->target->vocabulary_size,
+            n_priors);
+
+    for (token e=0; e<ta->source->vocabulary_size; e++) {
+        size_t k = ta->source_count[e].n_items;
+        token fs[k];
+        uint32_t ns[k];
+        map_token_u32_items(ta->source_count + e, fs, ns);
+        for (size_t i=0; i<k; i++)
+            fprintf(file, "%"PRItoken" %"PRItoken" %"PRIu32"\n",
+                    e, fs[i], ns[i]);
     }
+
+    //fprintf(file, "%d\n", JUMP_ARRAY_LEN);
+    //for (size_t i=0; i<JUMP_ARRAY_LEN; i++) {
+    //    fprintf(file, "%d\n", (int)roundf(ta->jump_counts[i]-JUMP_ALPHA));
+    //}
 
     // TODO: compute and write fertility stats? Not easy to use though.
 }
@@ -393,10 +421,21 @@ resample:;
                     const size_t fert_idx = get_fert_index(e, fert[i]+1);
                     uint32_t n = 0;
                     map_token_u32_get(ta->source_count + e, f, &n);
-                    ps_sum += ta->inv_source_count_sum[e] *
-                              (LEX_ALPHA + (count)n) *
-                              jump_counts[jump1] * jump_counts[jump2] *
-                              fert_counts[fert_idx];
+                    if (ta->source_prior != NULL) {
+                        float alpha = 0.0f;
+                        map_token_u32_get(ta->source_prior + e, f,
+                                          (uint32_t*)&alpha);
+                        alpha += LEX_ALPHA;
+                        ps_sum += ta->inv_source_count_sum[e] *
+                                  ((count)alpha + (count)n) *
+                                  jump_counts[jump1] * jump_counts[jump2] *
+                                  fert_counts[fert_idx];
+                    } else {
+                        ps_sum += ta->inv_source_count_sum[e] *
+                                  (LEX_ALPHA + (count)n) *
+                                  jump_counts[jump1] * jump_counts[jump2] *
+                                  fert_counts[fert_idx];
+                    }
                     ps[i] = ps_sum;
                     // We can same a few cycles by replacing calls to
                     // get_jump_index() with bounded increment/decrement
@@ -431,9 +470,19 @@ resample:;
                     const token e = source_tokens[i];
                     uint32_t n = 0;
                     map_token_u32_get(ta->source_count + e, f, &n);
-                    ps_sum += ta->inv_source_count_sum[e] *
-                              (LEX_ALPHA + (count)n) *
-                              jump_counts[jump1] * jump_counts[jump2];
+                    if (ta->source_prior != NULL) {
+                        float alpha = 0.0f;
+                        map_token_u32_get(ta->source_prior + e, f,
+                                          (uint32_t*)&alpha);
+                        alpha += LEX_ALPHA;
+                        ps_sum += ta->inv_source_count_sum[e] *
+                                  (alpha + (count)n) *
+                                  jump_counts[jump1] * jump_counts[jump2];
+                    } else {
+                        ps_sum += ta->inv_source_count_sum[e] *
+                                  (LEX_ALPHA + (count)n) *
+                                  jump_counts[jump1] * jump_counts[jump2];
+                    }
                     ps[i] = ps_sum;
                     // We can same a few cycles by replacing calls to
                     // get_jump_index() with bounded increment/decrement
@@ -464,8 +513,17 @@ resample:;
                     const token e = source_tokens[i];
                     uint32_t n = 0;
                     map_token_u32_get(ta->source_count + e, f, &n);
-                    ps_sum += ta->inv_source_count_sum[e] *
-                              (LEX_ALPHA + (count)n);
+                    if (ta->source_prior != NULL) {
+                        float alpha = 0.0f;
+                        map_token_u32_get(ta->source_prior + e, f,
+                                          (uint32_t*)&alpha);
+                        alpha += LEX_ALPHA;
+                        ps_sum += ta->inv_source_count_sum[e] *
+                                  (alpha + (count)n);
+                    } else {
+                        ps_sum += ta->inv_source_count_sum[e] *
+                                  (LEX_ALPHA + (count)n);
+                    }
                     ps[i] = ps_sum;
                 }
                 if (sentence_scores != NULL) {
@@ -580,10 +638,22 @@ void text_alignment_make_counts(struct text_alignment *ta) {
     const int model = ta->model;
     struct sentence **source_sentences = ta->source->sentences;
     struct sentence **target_sentences = ta->target->sentences;
+
+    // TODO: do we need a special case for NULL links? Probably not, since
+    //       NULL alignment statistics could also provide valuable prior
+    //       information
+    //map_token_u32_reset(ta->source_count + 0);
+    //ta->inv_source_count_sum[0] =
+    //    NULL_ALPHA * (count)ta->target->vocabulary_size;
+
     for (size_t i=0; i<ta->source->vocabulary_size; i++) {
         map_token_u32_reset(ta->source_count + i);
-        ta->inv_source_count_sum[i] =
-            LEX_ALPHA * (count)ta->target->vocabulary_size;
+        if (ta->source_prior != NULL) {
+            ta->inv_source_count_sum[i] = ta->source_prior_sum[i];
+        } else {
+            ta->inv_source_count_sum[i] =
+                LEX_ALPHA * (count)ta->target->vocabulary_size;
+        }
     }
     if (model >= 2) {
         for (size_t i=0; i<JUMP_ARRAY_LEN-1; i++)
@@ -641,6 +711,72 @@ void text_alignment_randomize(struct text_alignment *ta, random_state *state) {
     }
 }
 
+int text_alignment_load_priors(
+        struct text_alignment *ta, const char *filename)
+{
+    FILE *file = (!strcmp(filename, "-"))? stdin: fopen(filename, "r");
+    if (file == NULL) {
+        perror("text_alignment_load_priors(): failed to open text file");
+        return -1;
+    }
+ 
+    if ((ta->source_prior =
+         malloc(ta->source->vocabulary_size*sizeof(struct map_token_u32))
+        ) == NULL)
+    {
+        perror("text_alignment_load_priors(): "
+               "failed to allocate buffer pointers");
+        exit(EXIT_FAILURE);
+    }
+    for (size_t i=0; i<ta->source->vocabulary_size; i++)
+        map_token_u32_create(ta->source_prior + i);
+    if ((ta->source_prior_sum =
+         malloc(sizeof(count)*ta->source->vocabulary_size)) == NULL)
+    {
+        perror("text_alignment_load_priors(): "
+               "failed to allocate counter array");
+        exit(EXIT_FAILURE);
+    }
+    for (size_t i=0; i<ta->source->vocabulary_size; i++) {
+        ta->source_prior_sum[i] = 0.0;
+    }
+
+    size_t source_vocabulary_size, target_vocabulary_size, n_lex_priors;
+    if (fscanf(file, "%zd %zd %zd\n",
+                &source_vocabulary_size,
+                &target_vocabulary_size,
+                &n_lex_priors) != 3)
+    {
+        fprintf(stderr,
+                "text_alignment_load_priors(): failed to read header in %s\n",
+                filename);
+        if (file != stdin) fclose(file);
+        return -1;
+    }
+
+    for (size_t i=0; i<n_lex_priors; i++) {
+        token e, f;
+        float alpha;
+        if (fscanf(file, "%"SCNtoken" %"SCNtoken" %f", &e, &f, &alpha) != 3) {
+            fprintf(stderr,
+                    "text_alignment_load_priors(): error in line %zd of %s\n",
+                    i+2, filename);
+            if (file != stdin) fclose(file);
+            return -1;
+        }
+        // TODO: fix this properly
+        map_token_u32_add(ta->source_prior + e, f, *((uint32_t*)&alpha));
+        ta->source_prior_sum[e] += alpha;
+    }
+
+    for (size_t e=0; e<ta->source->vocabulary_size; e++) {
+        ta->source_prior_sum[e] +=
+            LEX_ALPHA * (float)ta->target->vocabulary_size;
+    }
+
+    return 0;
+}
+
 struct text_alignment *text_alignment_create(
         const struct text *source, const struct text *target)
 {
@@ -658,6 +794,11 @@ struct text_alignment *text_alignment_create(
     ta->source = source;
     ta->target = target;
     ta->n_clean = 0;
+
+    // These should be initialized with text_alignment_load_priors()
+    ta->source_prior = NULL;
+    ta->source_prior_sum = NULL;
+
     size_t buf_size = 0;
     for (size_t i=0; i<target->n_sentences; i++) {
         if (target->sentences[i] != NULL && source->sentences[i] != NULL)
@@ -826,7 +967,8 @@ static void align(
         const int *n_iters,
         const char *links_filename,
         const char *stats_filename,
-        const char *scores_filename)
+        const char *scores_filename,
+        const char *priors_filename)
 {
     double t0;
     random_state state;
@@ -834,11 +976,22 @@ static void align(
 
     random_system_state(&state);
 
+    // TODO: everywhere, add LEX_ALPHA + alpha?
     t0 = seconds();
     for (int i=0; i<n_samplers; i++) {
         tas[i] = text_alignment_create(
                 (reverse? target: source), (reverse? source: target));
         tas[i]->null_prior = null_prior;
+        if (priors_filename != NULL) {
+            // TODO: since read-only, could use the pointer from tas[0]
+            //       for everything, but this would require careful
+            //       initialization/destruction
+            if(text_alignment_load_priors(tas[i], priors_filename)) {
+                fprintf(stderr, "Unable to load %s, exiting\n",
+                        priors_filename);
+                exit(1);
+            }
+        }
     }
     if (!quiet)
         fprintf(stderr, "Created alignment structures: %.3f s\n",
@@ -934,7 +1087,8 @@ static void align(
 
 static void help(const char *filename) {
     fprintf(stderr,
-"Usage: %s [-s source_input] [-t target_input] [-f forward_links_output] "
+"Usage: %s [-s source_input] [-t target_input] [-p priors_input] "
+"[-f forward_links_output] "
 "[-r reverse_links_output] [-S statistics_output] [-x scores_output] "
 "[-1 n_IBM1_iters] [-2 n_HMM_iters] [-3 n_fertility_iters] "
 "[-n n_samplers] [-N null_prior] [-q] -m model_type\n", filename);
@@ -944,6 +1098,7 @@ int main(int argc, char *argv[]) {
     double t0;
     int opt;
     char *source_filename = "-", *target_filename = "-",
+         *priors_filename = NULL,
          *links_filename_fwd = NULL, *links_filename_rev = NULL,
          *stats_filename = NULL, *scores_filename = NULL;
     int n_iters[3];
@@ -954,12 +1109,13 @@ int main(int argc, char *argv[]) {
 
     omp_set_nested(1);
 
-    while ((opt = getopt(argc, argv, "s:t:f:r:S:x:1:2:3:n:qm:N:h"))
+    while ((opt = getopt(argc, argv, "s:t:p:f:r:S:x:1:2:3:n:qm:N:h"))
             != -1)
     {
         switch(opt) {
             case 's': source_filename = optarg; break;
             case 't': target_filename = optarg; break;
+            case 'p': priors_filename = optarg; break;
             case 'f': links_filename_fwd = optarg; break;
             case 'r': links_filename_rev = optarg; break;
             case 'S': stats_filename = optarg; break;
@@ -1013,7 +1169,7 @@ int main(int argc, char *argv[]) {
                  links_filename_rev == NULL))
             align(reverse, source, target, model, null_prior, n_samplers,
                   quiet, n_iters, links_filename, stats_filename,
-                  scores_filename);
+                  scores_filename, priors_filename);
     }
 
     return 0;
