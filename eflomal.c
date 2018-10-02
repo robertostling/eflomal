@@ -90,6 +90,9 @@ struct text_alignment {
     link_t *buf;
     struct map_token_u32 *source_prior;
     count *source_prior_sum;
+    int has_jump_prior;
+    count jump_prior[JUMP_ARRAY_LEN];
+    count *fert_prior;
     struct map_token_u32 *source_count;
     count *inv_source_count_sum;
     count jump_counts[JUMP_ARRAY_LEN];
@@ -113,6 +116,9 @@ void text_alignment_free(struct text_alignment *ta) {
             map_token_u32_clear(ta->source_prior + i);
         free(ta->source_prior);
         free(ta->source_prior_sum);
+    }
+    if (ta->fert_prior != NULL) {
+        free(ta->fert_prior);
     }
     for (size_t i=0; i<ta->source->vocabulary_size; i++)
         map_token_u32_clear(ta->source_count + i);
@@ -151,53 +157,51 @@ void text_alignment_write_moses(
     }
 }
 
-void text_alignment_write_vocab(const struct text_alignment *ta, FILE *file) {
-    fprintf(file, "%u %u\n",
-            ta->source->vocabulary_size-1, ta->target->vocabulary_size-1);
-    for (size_t e=1; e<ta->source->vocabulary_size; e++) {
-        struct map_token_u32 *sc = ta->source_count + e;
-        token fs[sc->n_items];
-        uint32_t ns[sc->n_items];
-        map_token_u32_items(sc, fs, ns);
-        fprintf(file, "%zd", sc->n_items);
-        for (size_t i=0; i<sc->n_items; i++) {
-            if (fs[i] == 0) {
-                perror("text_alignment_write_vocab(): target type id == 0");
-                exit(1);
-            }
-            fprintf(file, " %"PRItoken" %"PRIu32, fs[i]-1, ns[i]);
-        }
-        fprintf(file, "\n");
-    }
-}
+//void text_alignment_write_vocab(const struct text_alignment *ta, FILE *file) {
+//    fprintf(file, "%u %u\n",
+//            ta->source->vocabulary_size-1, ta->target->vocabulary_size-1);
+//    for (size_t e=1; e<ta->source->vocabulary_size; e++) {
+//        struct map_token_u32 *sc = ta->source_count + e;
+//        token fs[sc->n_items];
+//        uint32_t ns[sc->n_items];
+//        map_token_u32_items(sc, fs, ns);
+//        fprintf(file, "%zd", sc->n_items);
+//        for (size_t i=0; i<sc->n_items; i++) {
+//            if (fs[i] == 0) {
+//                perror("text_alignment_write_vocab(): target type id == 0");
+//                exit(1);
+//            }
+//            fprintf(file, " %"PRItoken" %"PRIu32, fs[i]-1, ns[i]);
+//        }
+//        fprintf(file, "\n");
+//    }
+//}
 
 void text_alignment_write_stats(const struct text_alignment *ta, FILE *file) {
     // Total number of non-zero (e, f) pairs
-    size_t n_priors = 0;
+    //size_t n_priors = 0;
 
-    for (size_t e=0; e<ta->source->vocabulary_size; e++)
-        n_priors += ta->source_count[e].n_items;
+    //for (size_t e=0; e<ta->source->vocabulary_size; e++)
+    //    n_priors += ta->source_count[e].n_items;
 
-    fprintf(file, "%"PRItoken" %"PRItoken" %zd\n",
-            ta->source->vocabulary_size, ta->target->vocabulary_size,
-            n_priors);
+    //fprintf(file, "%"PRItoken" %"PRItoken" %zd\n",
+    //        ta->source->vocabulary_size, ta->target->vocabulary_size,
+    //        n_priors);
 
-    for (token e=0; e<ta->source->vocabulary_size; e++) {
-        size_t k = ta->source_count[e].n_items;
-        token fs[k];
-        uint32_t ns[k];
-        map_token_u32_items(ta->source_count + e, fs, ns);
-        for (size_t i=0; i<k; i++)
-            fprintf(file, "%"PRItoken" %"PRItoken" %"PRIu32"\n",
-                    e, fs[i], ns[i]);
-    }
-
-    //fprintf(file, "%d\n", JUMP_ARRAY_LEN);
-    //for (size_t i=0; i<JUMP_ARRAY_LEN; i++) {
-    //    fprintf(file, "%d\n", (int)roundf(ta->jump_counts[i]-JUMP_ALPHA));
+    //for (token e=0; e<ta->source->vocabulary_size; e++) {
+    //    size_t k = ta->source_count[e].n_items;
+    //    token fs[k];
+    //    uint32_t ns[k];
+    //    map_token_u32_items(ta->source_count + e, fs, ns);
+    //    for (size_t i=0; i<k; i++)
+    //        fprintf(file, "%"PRItoken" %"PRItoken" %"PRIu32"\n",
+    //                e, fs[i], ns[i]);
     //}
 
-    // TODO: compute and write fertility stats? Not easy to use though.
+    fprintf(file, "%d\n", JUMP_ARRAY_LEN);
+    for (size_t i=0; i<JUMP_ARRAY_LEN; i++) {
+        fprintf(file, "%d\n", (int)roundf(ta->jump_counts[i]-JUMP_ALPHA));
+    }
 }
 
 // Get the index of the jump distribution parameter vector for a jump from
@@ -241,8 +245,17 @@ void text_alignment_sample(
         for (size_t i=0; i<ta->source->vocabulary_size; i++)
             e_count[i] = 0;
 
-        for (size_t i=0; i<FERT_ARRAY_LEN*ta->source->vocabulary_size; i++)
-            fert_counts[i] = (count) FERT_ALPHA;
+        if (ta->fert_prior != NULL) {
+            // TODO: decide on whether to add FERT_ALPHA
+            // TODO: 0 or 1-based? NULL included?
+            for (size_t i=0; i<FERT_ARRAY_LEN*ta->source->vocabulary_size; i++)
+            {
+                fert_counts[i] = ta->fert_prior[i] + (count) FERT_ALPHA;
+            }
+        } else {
+            for (size_t i=0; i<FERT_ARRAY_LEN*ta->source->vocabulary_size; i++)
+                fert_counts[i] = (count) FERT_ALPHA;
+        }
 
         // go through the text and compute fertility statistics
         for (size_t sent=0; sent<n_sentences; sent++) {
@@ -278,7 +291,7 @@ void text_alignment_sample(
             // skip vocabulary items that do not actually occur in this text
             if (e_count[e] == 0) continue;
             count alpha[FERT_ARRAY_LEN];
-            count *buf = ta->fert_counts + get_fert_index(e, 0);
+            count *buf = fert_counts + get_fert_index(e, 0);
             memcpy(alpha, buf, FERT_ARRAY_LEN*sizeof(count));
 #if COUNT_BITS == 32
             random_dirichlet32_unnormalized(state, FERT_ARRAY_LEN, alpha, buf);
@@ -656,9 +669,18 @@ void text_alignment_make_counts(struct text_alignment *ta) {
         }
     }
     if (model >= 2) {
-        for (size_t i=0; i<JUMP_ARRAY_LEN-1; i++)
-            ta->jump_counts[i] = (count) JUMP_ALPHA;
-        ta->jump_counts[JUMP_SUM] = (count) (JUMP_MAX_EST*JUMP_ALPHA);
+        if (ta->has_jump_prior) {
+            // TODO: decide on whether to add JUMP_ALPHA
+            ta->jump_counts[JUMP_SUM] = (count) (JUMP_MAX_EST*JUMP_ALPHA);
+            for (size_t i=0; i<JUMP_ARRAY_LEN-1; i++) {
+                ta->jump_counts[i] = ta->jump_prior[i] + (count) JUMP_ALPHA;
+                ta->jump_counts[JUMP_SUM] += ta->jump_prior[i];
+            }
+        } else {
+            for (size_t i=0; i<JUMP_ARRAY_LEN-1; i++)
+                ta->jump_counts[i] = (count) JUMP_ALPHA;
+            ta->jump_counts[JUMP_SUM] = (count) (JUMP_MAX_EST*JUMP_ALPHA);
+        }
     }
     const size_t n_sentences =
         ta->n_clean? ta->n_clean: ta->target->n_sentences;
@@ -714,44 +736,85 @@ void text_alignment_randomize(struct text_alignment *ta, random_state *state) {
 int text_alignment_load_priors(
         struct text_alignment *ta, const char *filename, int reverse)
 {
+    size_t lineno = 1;
     FILE *file = (!strcmp(filename, "-"))? stdin: fopen(filename, "r");
     if (file == NULL) {
         perror("text_alignment_load_priors(): failed to open text file");
         return -1;
     }
  
-    if ((ta->source_prior =
-         malloc(ta->source->vocabulary_size*sizeof(struct map_token_u32))
-        ) == NULL)
-    {
-        perror("text_alignment_load_priors(): "
-               "failed to allocate buffer pointers");
-        exit(EXIT_FAILURE);
-    }
-    for (size_t i=0; i<ta->source->vocabulary_size; i++)
-        map_token_u32_create(ta->source_prior + i);
-    if ((ta->source_prior_sum =
-         malloc(sizeof(count)*ta->source->vocabulary_size)) == NULL)
-    {
-        perror("text_alignment_load_priors(): "
-               "failed to allocate counter array");
-        exit(EXIT_FAILURE);
-    }
-    for (size_t i=0; i<ta->source->vocabulary_size; i++) {
-        ta->source_prior_sum[i] = 0.0;
-    }
-
-    size_t source_vocabulary_size, target_vocabulary_size, n_lex_priors;
-    if (fscanf(file, "%zd %zd %zd\n",
+    size_t source_vocabulary_size, target_vocabulary_size, n_lex_priors,
+           n_jump_priors, n_fert_priors,
+           n_fwd_jump_priors, n_fwd_fert_priors,
+           n_rev_jump_priors, n_rev_fert_priors;
+    if (fscanf(file, "%zd %zd %zd %zd %zd %zd %zd\n",
                 &source_vocabulary_size,
                 &target_vocabulary_size,
-                &n_lex_priors) != 3)
+                &n_lex_priors,
+                &n_fwd_jump_priors,
+                &n_rev_jump_priors,
+                &n_fwd_fert_priors,
+                &n_rev_fert_priors) != 7)
     {
         fprintf(stderr,
                 "text_alignment_load_priors(): failed to read header in %s\n",
                 filename);
         if (file != stdin) fclose(file);
         return -1;
+    }
+    lineno++;
+
+    if (reverse) {
+        n_jump_priors = n_rev_jump_priors;
+        n_fert_priors = n_rev_fert_priors;
+    } else {
+        n_jump_priors = n_fwd_jump_priors;
+        n_fert_priors = n_fwd_fert_priors;
+    }
+
+    if (n_lex_priors) {
+        if ((ta->source_prior =
+             malloc(ta->source->vocabulary_size*sizeof(struct map_token_u32))
+            ) == NULL)
+        {
+            perror("text_alignment_load_priors(): "
+                   "failed to allocate buffer pointers");
+            exit(EXIT_FAILURE);
+        }
+        for (size_t i=0; i<ta->source->vocabulary_size; i++)
+            map_token_u32_create(ta->source_prior + i);
+        if ((ta->source_prior_sum =
+             malloc(sizeof(count)*ta->source->vocabulary_size)) == NULL)
+        {
+            perror("text_alignment_load_priors(): "
+                   "failed to allocate counter array");
+            exit(EXIT_FAILURE);
+        }
+        for (size_t i=0; i<ta->source->vocabulary_size; i++) {
+            ta->source_prior_sum[i] = 0.0;
+        }
+    }
+
+    if (n_fert_priors) {
+        if ((ta->fert_prior =
+             malloc(ta->source->vocabulary_size*sizeof(count)*FERT_ARRAY_LEN))
+                == NULL)
+        {
+            perror("text_alignment_create(): failed to allocate fertility "
+                   "prior array");
+            exit(EXIT_FAILURE);
+        }
+        for (size_t i=0;i<ta->source->vocabulary_size*FERT_ARRAY_LEN;i++)
+            ta->fert_prior[i] = 0.0;
+    }
+
+    // TODO: check that JUMP_ALPHA and FERT_ALPHA are added where they should,
+    // otherwise add here! (above and below)
+    if (n_jump_priors) {
+        ta->has_jump_prior = 1;
+
+        for (size_t i=0; i<JUMP_ARRAY_LEN; i++)
+            ta->jump_prior[i] = 0.0;
     }
 
     size_t t;
@@ -766,8 +829,8 @@ int text_alignment_load_priors(
     {
         fprintf(stderr,
                 "text_alignment_load_priors(): vocabulary size mismatch, "
-                "source is %zd (expected %zd) "
-                "and target is %zd (expected %zd)\n",
+                "source is %zd (expected %"PRItoken") "
+                "and target is %zd (expected %"PRItoken") in %s\n",
                 source_vocabulary_size, ta->source->vocabulary_size,
                 target_vocabulary_size, ta->target->vocabulary_size,
                 filename);
@@ -778,13 +841,14 @@ int text_alignment_load_priors(
     for (size_t i=0; i<n_lex_priors; i++) {
         token e, f, t;
         float alpha;
-        if (fscanf(file, "%"SCNtoken" %"SCNtoken" %f", &e, &f, &alpha) != 3) {
+        if (fscanf(file, "%"SCNtoken" %"SCNtoken" %f\n", &e, &f, &alpha) != 3) {
             fprintf(stderr,
                     "text_alignment_load_priors(): error in line %zd of %s\n",
                     i+2, filename);
             if (file != stdin) fclose(file);
             return -1;
         }
+        lineno++;
         if (reverse) {
             t = e;
             e = f;
@@ -795,9 +859,97 @@ int text_alignment_load_priors(
         ta->source_prior_sum[e] += alpha;
     }
 
-    for (size_t e=0; e<ta->source->vocabulary_size; e++) {
-        ta->source_prior_sum[e] +=
-            LEX_ALPHA * (float)ta->target->vocabulary_size;
+    if (n_lex_priors) {
+        for (size_t e=0; e<ta->source->vocabulary_size; e++) {
+            ta->source_prior_sum[e] +=
+                LEX_ALPHA * (float)ta->target->vocabulary_size;
+        }
+    }
+
+    for (size_t i=0; i<n_fwd_jump_priors; i++) {
+        int jump;
+        size_t jump_index;
+        float alpha;
+        if (fscanf(file, "%d %f\n", &jump, &alpha) != 2) {
+            fprintf(stderr,
+                    "text_alignment_load_priors(): error in line %zd of %s\n",
+                    lineno, filename);
+            if (file != stdin) fclose(file);
+            return -1;
+        }
+        jump_index = MAX(0, MIN(JUMP_ARRAY_LEN-1, jump + JUMP_ARRAY_LEN/2));
+        if (! reverse)
+            ta->jump_prior[jump_index] += alpha;
+        lineno++;
+    }
+
+    for (size_t i=0; i<n_rev_jump_priors; i++) {
+        int jump;
+        size_t jump_index;
+        float alpha;
+        if (fscanf(file, "%d %f\n", &jump, &alpha) != 2) {
+            fprintf(stderr,
+                    "text_alignment_load_priors(): error in line %zd of %s\n",
+                    i+2, filename);
+            if (file != stdin) fclose(file);
+            return -1;
+        }
+        jump_index = MAX(0, MIN(JUMP_ARRAY_LEN-1, jump + JUMP_ARRAY_LEN/2));
+        if (reverse)
+            ta->jump_prior[jump_index] += alpha;
+        lineno++;
+    }
+
+    for (size_t i=0; i<n_fwd_fert_priors; i++) {
+        int k;
+        token e;
+        size_t fert_index;
+        float alpha;
+        if (fscanf(file, "%"SCNtoken" %d %f\n", &e, &k, &alpha) != 3) {
+            fprintf(stderr,
+                    "text_alignment_load_priors(): error in line %zd of %s\n",
+                    lineno, filename);
+            if (file != stdin) fclose(file);
+            return -1;
+        }
+        fert_index = get_fert_index(e, k);
+        if (! reverse) {
+            if (e >= ta->source->vocabulary_size) {
+                fprintf(stderr,
+                        "text_alignment_load_priors(): index %"PRItoken" out"
+                        " of range (forward)", e);
+                if (file != stdin) fclose(file);
+                return -1;
+            }
+            ta->fert_prior[fert_index] += alpha;
+        }
+        lineno++;
+    }
+
+    for (size_t i=0; i<n_rev_fert_priors; i++) {
+        int k;
+        token e;
+        size_t fert_index;
+        float alpha;
+        if (fscanf(file, "%"SCNtoken" %d %f\n", &e, &k, &alpha) != 3) {
+            fprintf(stderr,
+                    "text_alignment_load_priors(): error in line %zd of %s\n",
+                    lineno, filename);
+            if (file != stdin) fclose(file);
+            return -1;
+        }
+        fert_index = get_fert_index(e, k);
+        if (reverse) {
+            if (e >= ta->source->vocabulary_size) {
+                fprintf(stderr,
+                        "text_alignment_load_priors(): index %"PRItoken" out"
+                        " of range (reverse)", e);
+                if (file != stdin) fclose(file);
+                return -1;
+            }
+            ta->fert_prior[fert_index] += alpha;
+        }
+        lineno++;
     }
 
     return 0;
@@ -824,6 +976,8 @@ struct text_alignment *text_alignment_create(
     // These should be initialized with text_alignment_load_priors()
     ta->source_prior = NULL;
     ta->source_prior_sum = NULL;
+    ta->fert_prior = NULL;
+    ta->has_jump_prior = 0;
 
     size_t buf_size = 0;
     for (size_t i=0; i<target->n_sentences; i++) {
@@ -1002,7 +1156,6 @@ static void align(
 
     random_system_state(&state);
 
-    // TODO: everywhere, add LEX_ALPHA + alpha?
     t0 = seconds();
     for (int i=0; i<n_samplers; i++) {
         tas[i] = text_alignment_create(
@@ -1070,13 +1223,13 @@ static void align(
 
     struct text_alignment *ta = tas[0];
 
-    if (stats_filename != NULL && !reverse) {
+    if (stats_filename != NULL) {
         if (!quiet)
             fprintf(stderr, "Writing alignment statistics to %s\n",
                     stats_filename);
         FILE *file = (!strcmp(stats_filename, "-"))? stdout
                      : fopen(stats_filename, "w");
-        text_alignment_write_vocab(ta, file);
+        //text_alignment_write_vocab(ta, file);
         text_alignment_write_stats(ta, file);
         if (file != stdout) fclose(file);
     }
@@ -1090,7 +1243,7 @@ static void align(
         if (file != stdout) fclose(file);
     }
 
-    if (scores_filename != NULL && !reverse) {
+    if (scores_filename != NULL) {
         count *scores = malloc(sizeof(count)*ta->source->n_sentences);
         for (size_t i=0; i<ta->source->n_sentences; i++)
             scores[i] = (count)0.0;
