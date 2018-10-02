@@ -49,8 +49,32 @@ details.
 
 ## Input data format
 
-The `align.py` interface expects one sentence per line with space-separated
+When used with the `-s` and `-t` options for separate source/target files, the
+`align.py` interface expects one sentence per line with space-separated
 tokens, similar to most word alignment software.
+
+The `-i` option assumes a `fast_text` style joint source/target file of the
+format
+```
+source sentence ||| target sentence
+another source sentence ||| another target sentence
+...
+```
+
+The `--priors` option expects a file of the following structure:
+```
+sourceword1<TAB>targetword1<TAB>alpha1
+sourceword2<TAB>targetword2<TAB>alpha2
+sourceword3<TAB>targetword3<TAB>alpha3
+...
+```
+where the `alphaN` values will be added to the Dirichlet prior of generating
+`targetewordN` from `sourcewordN` (or vice versa, for reverse-direction
+alignments). Note that the source and target word will be processed in the
+same way as input text, i.e. lower-cased (always) and optionally stemmed
+according to the `--source-prefix-len`, `--source-suffix-len`,
+`--target-prefix-len`, `--target-suffix-len` options. In other words, you
+should be able to pass a raw wordlist to it.
 
 ## Output data format
 

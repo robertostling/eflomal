@@ -712,7 +712,7 @@ void text_alignment_randomize(struct text_alignment *ta, random_state *state) {
 }
 
 int text_alignment_load_priors(
-        struct text_alignment *ta, const char *filename)
+        struct text_alignment *ta, const char *filename, int reverse)
 {
     FILE *file = (!strcmp(filename, "-"))? stdin: fopen(filename, "r");
     if (file == NULL) {
@@ -754,8 +754,29 @@ int text_alignment_load_priors(
         return -1;
     }
 
+    size_t t;
+    if (reverse) {
+        t = source_vocabulary_size;
+        source_vocabulary_size = target_vocabulary_size;
+        target_vocabulary_size = t;
+    }
+
+    if (source_vocabulary_size != ta->source->vocabulary_size ||
+        target_vocabulary_size != ta->target->vocabulary_size)
+    {
+        fprintf(stderr,
+                "text_alignment_load_priors(): vocabulary size mismatch, "
+                "source is %zd (expected %zd) "
+                "and target is %zd (expected %zd)\n",
+                source_vocabulary_size, ta->source->vocabulary_size,
+                target_vocabulary_size, ta->target->vocabulary_size,
+                filename);
+        if (file != stdin) fclose(file);
+        return -1;
+    }
+
     for (size_t i=0; i<n_lex_priors; i++) {
-        token e, f;
+        token e, f, t;
         float alpha;
         if (fscanf(file, "%"SCNtoken" %"SCNtoken" %f", &e, &f, &alpha) != 3) {
             fprintf(stderr,
@@ -763,6 +784,11 @@ int text_alignment_load_priors(
                     i+2, filename);
             if (file != stdin) fclose(file);
             return -1;
+        }
+        if (reverse) {
+            t = e;
+            e = f;
+            f = t;
         }
         // TODO: fix this properly
         map_token_u32_add(ta->source_prior + e, f, *((uint32_t*)&alpha));
@@ -986,7 +1012,7 @@ static void align(
             // TODO: since read-only, could use the pointer from tas[0]
             //       for everything, but this would require careful
             //       initialization/destruction
-            if(text_alignment_load_priors(tas[i], priors_filename)) {
+            if(text_alignment_load_priors(tas[i], priors_filename, reverse)) {
                 fprintf(stderr, "Unable to load %s, exiting\n",
                         priors_filename);
                 exit(1);

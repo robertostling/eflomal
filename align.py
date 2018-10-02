@@ -68,7 +68,10 @@ def main():
         '-r', '--reverse-links', dest='links_filename_rev', type=str,
         metavar='filename',
         help='Filename to write reverse direction alignments to')
-
+    parser.add_argument(
+        '-p', '--priors', dest='priors_filename', type=str, metavar='filename',
+        help='Filename of lexical priors')
+ 
     args = parser.parse_args()
 
     if not (args.joint_filename or (args.source_filename and
@@ -91,6 +94,32 @@ def main():
                     filename,
                   file=sys.stderr, flush=True)
             sys.exit(1)
+
+    if args.priors_filename:
+        if args.verbose:
+            print('Reading lexical priors from %s...' %
+                    args.priors_filename,
+                  file=sys.stderr, flush=True)
+
+        priors_list = []
+        with open(args.priors_filename, 'r', encoding='utf-8') as f:
+            for i, line in enumerate(f):
+                fields = line.rstrip('\n').split('\t')
+                if len(fields) != 3:
+                    print('ERROR: priors file %s line %d contains %d '
+                          'tab-separated fields but should have 3' % (
+                              args.priors_filename, i+1, len(fields)),
+                          file=sys.stderr, flush=True)
+                    sys.exit(1)
+                try:
+                    alpha = float(fields[2])
+                except ValueError:
+                    print('ERROR: priors file %s line %d contains alpha '
+                          'value of "%s" which is not numeric' % (
+                              args.priors_filename, i+1, fields[2]),
+                          file=sys.stderr, flush=True)
+                    sys.exit(1)
+                priors_list.append((fields[0], fields[1], alpha))
 
     if args.joint_filename:
         if args.verbose:
@@ -120,7 +149,6 @@ def main():
                     f, True, args.source_prefix_len, args.source_suffix_len)
             n_src_sents = len(src_sents)
             src_voc_size = len(src_index)
-            src_index = None
             srcf = NamedTemporaryFile('wb')
             write_text(srcf, tuple(src_sents), src_voc_size)
             src_sents = None
@@ -131,11 +159,57 @@ def main():
                     f, True, args.target_prefix_len, args.target_suffix_len)
             trg_voc_size = len(trg_index)
             n_trg_sents = len(trg_sents)
-            trg_index = None
             trgf = NamedTemporaryFile('wb')
             write_text(trgf, tuple(trg_sents), trg_voc_size)
             trg_sents = None
             trg_text = None
+
+        if args.priors_filename:
+            priors_indexed = {}
+            for src_word, trg_word, alpha in priors_list:
+                if src_word == '<NULL>':
+                    e = 0
+                else:
+                    src_word = src_word.lower()
+                    if args.source_prefix_len != 0:
+                        src_word = src_word[:args.source_prefix_len]
+                    if args.source_suffix_len != 0:
+                        src_word = src_word[-args.source_suffix_len:]
+                    e = src_index.get(src_word)
+                    if e is not None:
+                        e = e + 1
+
+                if trg_word == '<NULL>':
+                    f = 0
+                else:
+                    trg_word = trg_word.lower()
+                    if args.target_prefix_len != 0:
+                        trg_word = trg_word[:args.target_prefix_len]
+                    if args.target_suffix_len != 0:
+                        trg_word = trg_word[-args.target_suffix_len:]
+                    f = trg_index.get(trg_word)
+                    if f is not None:
+                        f = f + 1
+
+                if (e is not None) and (f is not None):
+                    priors_indexed[(e,f)] = priors_indexed.get((e,f), 0.0) \
+                            + alpha
+
+            if args.verbose:
+                print('%d (of %d) pairs of lexical priors used' % (
+                    len(priors_indexed), len(priors_list)),
+                        file=sys.stderr)
+            priorsf = NamedTemporaryFile('w', encoding='utf-8')
+            print('%d %d %d' % (
+                len(src_index)+1, len(trg_index)+1, len(priors_indexed)),
+                file=priorsf)
+            for (e, f), alpha in sorted(priors_indexed.items()):
+                print('%d %d %g' % (e, f, alpha), file=priorsf)
+            priorsf.flush()
+
+        trg_index = None
+        src_index = None
+
     else:
         if args.verbose:
             print('Reading source text from %s...' % args.source_filename,
@@ -182,6 +256,8 @@ def main():
           links_filename_rev=args.links_filename_rev,
           statistics_filename=None,
           scores_filename=None,
+          priors_filename=(None if args.priors_filename is None
+                           else priorsf.name),
           model=args.model,
           n_iterations=iters,
           n_samplers=args.n_samplers,
@@ -192,6 +268,8 @@ def main():
 
     srcf.close()
     trgf.close()
+    if args.priors_filename:
+        priorsf.close()
 
 
 if __name__ == '__main__': main()

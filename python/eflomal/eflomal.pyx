@@ -94,6 +94,7 @@ def align(
         str links_filename_rev=None,
         str statistics_filename=None,
         str scores_filename=None,
+        str priors_filename=None,
         int model=3,
         tuple n_iterations=None,
         int n_samplers=1,
@@ -111,6 +112,7 @@ def align(
     links_filename_rev -- if given, write links here (reverse direction)
     statistics_filename -- if given, write alignment statistics here
     scores_filename -- if given, write sentence alignment scoeres here
+    priors_filename -- if given, read Dirichlet priors from here
     model -- alignment model (1 = IBM1, 2 = HMM, 3 = HMM+fertility)
     n_iterations -- 3-tuple with number of iterations per model, if this is
                     not given the numbers will be computed automatically based
@@ -160,6 +162,7 @@ def align(
     if links_filename_rev: args.extend(['-r', links_filename_rev])
     if statistics_filename: args.extend(['-S', statistics_filename])
     if scores_filename: args.extend(['-x', scores_filename])
+    if priors_filename: args.extend(['-p', priors_filename])
     if not quiet: sys.stderr.write(' '.join(args) + '\n')
     if use_gdb: args = ['gdb', '-ex=run', '--args'] + args
     subprocess.call(args)
