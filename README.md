@@ -76,6 +76,16 @@ according to the `--source-prefix-len`, `--source-suffix-len`,
 `--target-prefix-len`, `--target-suffix-len` options. In other words, you
 should be able to pass a raw wordlist to it.
 
+Note that the default value of the Dirichlet prior (defined in
+`eflomal.c` as `LEX_ALPHA`) will be *added* to whatever is specified in the
+priors file. This means that integer counts for whatever word forms you have
+data on are fine in the priors file.
+
+It s possible to use the special `<NULL>` token in the priors file, in case
+you want to encourage certain word forms to remain unaligned.
+Currently the `makepriors.py` script does not generate these, and this feature
+has not been tested yet.
+
 ## Generating priors
 
 If you have word alignments from, say, a large dataset you can use these to
