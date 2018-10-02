@@ -85,13 +85,20 @@ has not been tested yet.
 If you have word alignments from, say, a large dataset you can use these to
 generate priors (for use with `align.py` with the `--priors` option) using the
 `makepriors.py` script. Assuming you have produced alignments for the file
-`en-sv` into `en-sv.a`, you an generate `en-sv.priors` using:
+`en-sv` into `en-sv.fwd` (forward) and `en-sv.rev` (reverse), you an generate
+`en-sv.priors` using:
 
-    makepriors.py -i en-sv -a en-sv.a --priors en-sv.priors
+    ./makepriors.py -i en-sv -f en-sv.fwd -r en-sv.rev --priors en-sv.priors
+
+Alternatively, you can symmetrize `en-sv.fwd` and `en-sv.rev` into `en-sv.sym`
+and pass the same file to both `-f` and `-r`:
+
+    atools -c grow-diag-final-and -i en-sv.fwd -j en-sv.rev >en-sv.sym
+    ./makepriors.py -i en-sv -f en-sv.sym -r en-sv.sym --priors en-sv.priors
 
 Now, if you have another file to align, `en-sv.small`, simply use:
 
-    align.py -i en-sv.small --priors en-sv.priors ... [other options]
+    ./align.py -i en-sv.small --priors en-sv.priors ... [other options]
 
 ## Output data format
 
