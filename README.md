@@ -76,6 +76,19 @@ according to the `--source-prefix-len`, `--source-suffix-len`,
 `--target-prefix-len`, `--target-suffix-len` options. In other words, you
 should be able to pass a raw wordlist to it.
 
+## Generating priors
+
+If you have word alignments from, say, a large dataset you can use these to
+generate priors (for use with `align.py` with the `--priors` option) using the
+`makepriors.py` script. Assuming you have produced alignments for the file
+`en-sv` into `en-sv.a`, you an generate `en-sv.priors` using:
+
+    makepriors.py -i en-sv -a en-sv.a --priors en-sv.priors
+
+Now, if you have another file to align, `en-sv.small`, simply use:
+
+    align.py -i en-sv.small --priors en-sv.priors ... [other options]
+
 ## Output data format
 
 The alignment output contains the same number of lines as the input files,
