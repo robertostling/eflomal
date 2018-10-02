@@ -89,20 +89,20 @@ def main():
                     last_j = -1
                     last_i = -1
                     for i, j in sorted(fwd_links, key=itemgetter(1)):
-                        if i != last_i:
-                            hmmf_priors[j - last_j] += 1
+                        if j != last_j:
+                            hmmf_priors[i - last_i] += 1
                         last_i = i
                         last_j = j
-                    hmmf_priors[len(trg_sent) - last_j] += 1
+                    hmmf_priors[len(src_sent) - last_i] += 1
 
                     last_j = -1
                     last_i = -1
                     for i, j in sorted(rev_links, key=itemgetter(0)):
-                        if j != last_j:
-                            hmmr_priors[i - last_i] += 1
+                        if i != last_i:
+                            hmmr_priors[j - last_j] += 1
                         last_i = i
                         last_j = j
-                    hmmr_priors[len(src_sent) - last_i] += 1
+                    hmmr_priors[len(trg_sent) - last_j] += 1
 
                     fwd_fert = Counter(i for i, j in fwd_links)
                     rev_fert = Counter(j for i, j in rev_links)
