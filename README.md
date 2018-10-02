@@ -82,11 +82,14 @@ has not been tested yet.
 
 ## Generating priors
 
-If you have word alignments from, say, a large dataset you can use these to
-generate priors (for use with `align.py` with the `--priors` option) using the
-`makepriors.py` script. Assuming you have produced alignments for the file
-`en-sv` into `en-sv.fwd` (forward) and `en-sv.rev` (reverse), you an generate
-`en-sv.priors` using:
+If you have a large file that you want to use as "training data", `en-sv`, and
+a small file  that you later want to align quickly, `en-sv.small`, start by
+aligning the large file as usual, e.g.:
+
+    ./align.py -i en-sv --model 3 -f en-sv.fwd -r en-sv.rev
+
+Now you can generate priors based on this large aligned file, stored in
+`en-sv.priors`:
 
     ./makepriors.py -i en-sv -f en-sv.fwd -r en-sv.rev --priors en-sv.priors
 
@@ -96,9 +99,14 @@ and pass the same file to both `-f` and `-r`:
     atools -c grow-diag-final-and -i en-sv.fwd -j en-sv.rev >en-sv.sym
     ./makepriors.py -i en-sv -f en-sv.sym -r en-sv.sym --priors en-sv.priors
 
-Now, if you have another file to align, `en-sv.small`, simply use:
+Now, if you have another file to align, `en-sv.small`, simply use e.g.:
 
-    ./align.py -i en-sv.small --priors en-sv.priors ... [other options]
+    ./align.py -i en-sv.small --priors en-sv.priors --model 3 \
+        -f en-sv.small.fwd -r en-sv.small.rev
+
+This will be much faster than merging `en-sv` and `en-sv.small` and aligning
+them jointly, while nearly as accurate (assuming `en-sv.small` is much smaller
+than `en-sv`).
 
 ## Output data format
 
