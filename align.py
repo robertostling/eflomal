@@ -184,91 +184,6 @@ def main():
             trg_sents = None
             trg_text = None
 
-        def get_src_index(src_word):
-            src_word = src_word.lower()
-            if args.source_prefix_len != 0:
-                src_word = src_word[:args.source_prefix_len]
-            if args.source_suffix_len != 0:
-                src_word = src_word[-args.source_suffix_len:]
-            e = src_index.get(src_word)
-            if e is not None:
-                e = e + 1
-            return e
-
-        def get_trg_index(trg_word):
-            trg_word = trg_word.lower()
-            if args.target_prefix_len != 0:
-                trg_word = trg_word[:args.target_prefix_len]
-            if args.target_suffix_len != 0:
-                trg_word = trg_word[-args.target_suffix_len:]
-            f = trg_index.get(trg_word)
-            if f is not None:
-                f = f + 1
-            return f
-
-
-        if args.priors_filename:
-            priors_indexed = {}
-            for src_word, trg_word, alpha in priors_list:
-                if src_word == '<NULL>':
-                    e = 0
-                else:
-                    e = get_src_index(src_word)
-
-                if trg_word == '<NULL>':
-                    f = 0
-                else:
-                    f = get_trg_index(trg_word)
-
-                if (e is not None) and (f is not None):
-                    priors_indexed[(e,f)] = priors_indexed.get((e,f), 0.0) \
-                            + alpha
-
-            ferf_indexed = {}
-            for src_word, fert, alpha in ferf_priors:
-                e = get_src_index(src_word)
-                if e is not None:
-                    ferf_indexed[(e, fert)] = \
-                            ferf_indexed.get((e, fert), 0.0) + alpha
-
-            ferr_indexed = {}
-            for trg_word, fert, alpha in ferr_priors:
-                f = get_trg_index(trg_word)
-                if f is not None:
-                    ferr_indexed[(f, fert)] = \
-                            ferr_indexed.get((f, fert), 0.0) + alpha
-
-            if args.verbose:
-                print('%d (of %d) pairs of lexical priors used' % (
-                    len(priors_indexed), len(priors_list)),
-                        file=sys.stderr)
-            priorsf = NamedTemporaryFile('w', encoding='utf-8')
-            print('%d %d %d %d %d %d %d' % (
-                len(src_index)+1, len(trg_index)+1, len(priors_indexed),
-                len(hmmf_priors), len(hmmr_priors),
-                len(ferf_indexed), len(ferr_indexed)),
-                file=priorsf)
-
-            for (e, f), alpha in sorted(priors_indexed.items()):
-                print('%d %d %g' % (e, f, alpha), file=priorsf)
-
-            for jump, alpha in sorted(hmmf_priors.items()):
-                print('%d %g' % (jump, alpha), file=priorsf)
-
-            for jump, alpha in sorted(hmmr_priors.items()):
-                print('%d %g' % (jump, alpha), file=priorsf)
-
-            for (e, fert), alpha in sorted(ferf_indexed.items()):
-                print('%d %d %g' % (e, fert, alpha), file=priorsf)
-
-            for (f, fert), alpha in sorted(ferr_indexed.items()):
-                print('%d %d %g' % (f, fert, alpha), file=priorsf)
-
-            priorsf.flush()
-
-        trg_index = None
-        src_index = None
-
     else:
         if args.verbose:
             print('Reading source text from %s...' % args.source_filename,
@@ -278,7 +193,6 @@ def main():
                     f, True, args.source_prefix_len, args.source_suffix_len)
             n_src_sents = len(src_sents)
             src_voc_size = len(src_index)
-            src_index = None
             srcf = NamedTemporaryFile('wb')
             write_text(srcf, tuple(src_sents), src_voc_size)
             src_sents = None
@@ -291,7 +205,6 @@ def main():
                     f, True, args.target_prefix_len, args.target_suffix_len)
             trg_voc_size = len(trg_index)
             n_trg_sents = len(trg_sents)
-            trg_index = None
             trgf = NamedTemporaryFile('wb')
             write_text(trgf, tuple(trg_sents), trg_voc_size)
             trg_sents = None
@@ -301,6 +214,92 @@ def main():
                     n_src_sents, n_trg_sents),
                   file=sys.stderr, flush=True)
             sys.exit(1)
+
+    def get_src_index(src_word):
+        src_word = src_word.lower()
+        if args.source_prefix_len != 0:
+            src_word = src_word[:args.source_prefix_len]
+        if args.source_suffix_len != 0:
+            src_word = src_word[-args.source_suffix_len:]
+        e = src_index.get(src_word)
+        if e is not None:
+            e = e + 1
+        return e
+
+    def get_trg_index(trg_word):
+        trg_word = trg_word.lower()
+        if args.target_prefix_len != 0:
+            trg_word = trg_word[:args.target_prefix_len]
+        if args.target_suffix_len != 0:
+            trg_word = trg_word[-args.target_suffix_len:]
+        f = trg_index.get(trg_word)
+        if f is not None:
+            f = f + 1
+        return f
+
+
+    if args.priors_filename:
+        priors_indexed = {}
+        for src_word, trg_word, alpha in priors_list:
+            if src_word == '<NULL>':
+                e = 0
+            else:
+                e = get_src_index(src_word)
+
+            if trg_word == '<NULL>':
+                f = 0
+            else:
+                f = get_trg_index(trg_word)
+
+            if (e is not None) and (f is not None):
+                priors_indexed[(e,f)] = priors_indexed.get((e,f), 0.0) \
+                        + alpha
+
+        ferf_indexed = {}
+        for src_word, fert, alpha in ferf_priors:
+            e = get_src_index(src_word)
+            if e is not None:
+                ferf_indexed[(e, fert)] = \
+                        ferf_indexed.get((e, fert), 0.0) + alpha
+
+        ferr_indexed = {}
+        for trg_word, fert, alpha in ferr_priors:
+            f = get_trg_index(trg_word)
+            if f is not None:
+                ferr_indexed[(f, fert)] = \
+                        ferr_indexed.get((f, fert), 0.0) + alpha
+
+        if args.verbose:
+            print('%d (of %d) pairs of lexical priors used' % (
+                len(priors_indexed), len(priors_list)),
+                    file=sys.stderr)
+        priorsf = NamedTemporaryFile('w', encoding='utf-8')
+        print('%d %d %d %d %d %d %d' % (
+            len(src_index)+1, len(trg_index)+1, len(priors_indexed),
+            len(hmmf_priors), len(hmmr_priors),
+            len(ferf_indexed), len(ferr_indexed)),
+            file=priorsf)
+
+        for (e, f), alpha in sorted(priors_indexed.items()):
+            print('%d %d %g' % (e, f, alpha), file=priorsf)
+
+        for jump, alpha in sorted(hmmf_priors.items()):
+            print('%d %g' % (jump, alpha), file=priorsf)
+
+        for jump, alpha in sorted(hmmr_priors.items()):
+            print('%d %g' % (jump, alpha), file=priorsf)
+
+        for (e, fert), alpha in sorted(ferf_indexed.items()):
+            print('%d %d %g' % (e, fert, alpha), file=priorsf)
+
+        for (f, fert), alpha in sorted(ferr_indexed.items()):
+            print('%d %d %g' % (f, fert, alpha), file=priorsf)
+
+        priorsf.flush()
+
+    trg_index = None
+    src_index = None
+
 
     iters = (args.iters1, args.iters2, args.iters3)
     if any(x is None for x in iters[:args.model]):
