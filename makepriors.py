@@ -113,7 +113,9 @@ def main():
 
            # TODO: confirm EOF in all files
         else:
-            raise NotImplementedError('TODO')
+            raise NotImplementedError(
+                'For now, use mergefiles.py, then -i with this script '
+                '(instead of -s and -t)')
             with open(args.source_filename, 'r', encoding='utf-8') as srcf, \
                  open(args.target_filename, 'r', encoding='utf-8') as trgf:
                 for lineno, (src_line, trg_line, a_line) in enumerate(
