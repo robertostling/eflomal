@@ -1194,7 +1194,7 @@ static void align(
             if (!quiet)
                 fprintf(stderr, "Aligning with model %d (%d iterations)\n",
                         m, n_iters[m-1]);
-                t0 = seconds();
+            t0 = seconds();
 
 #pragma omp parallel for
             for (int i=0; i<n_samplers; i++) {
