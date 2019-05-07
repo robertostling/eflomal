@@ -1141,6 +1141,7 @@ static void align(
         const struct text *source,
         const struct text *target,
         int model,
+        int score_model,
         double null_prior,
         int n_samplers,
         int quiet,
@@ -1252,6 +1253,9 @@ static void align(
                      : fopen(scores_filename, "w");
 
         if (!quiet) fprintf(stderr, "Computing sentence scores\n");
+
+        // Switch to whatever model is specified for scoring
+        ta->model = score_model;
         text_alignment_sample(ta, &state, scores, NULL, 1);
 
         for (size_t i=0; i<ta->source->n_sentences; i++)
@@ -1270,7 +1274,8 @@ static void help(const char *filename) {
 "[-f forward_links_output] "
 "[-r reverse_links_output] [-S statistics_output] [-x scores_output] "
 "[-1 n_IBM1_iters] [-2 n_HMM_iters] [-3 n_fertility_iters] "
-"[-n n_samplers] [-N null_prior] [-q] -m model_type\n", filename);
+"[-n n_samplers] [-N null_prior] [-q] [-M score_model] -m model_type\n",
+        filename);
 }
 
 int main(int argc, char *argv[]) {
@@ -1281,14 +1286,14 @@ int main(int argc, char *argv[]) {
          *links_filename_fwd = NULL, *links_filename_rev = NULL,
          *stats_filename = NULL, *scores_filename = NULL;
     int n_iters[3];
-    int n_samplers = 1, quiet = 0, model = -1;
+    int n_samplers = 1, quiet = 0, model = -1, score_model = -1;
     double null_prior = 0.2;
 
     n_iters[0] = 1; n_iters[1] = 1; n_iters[2] = 1;
 
     omp_set_nested(1);
 
-    while ((opt = getopt(argc, argv, "s:t:p:f:r:S:x:1:2:3:n:qm:N:h"))
+    while ((opt = getopt(argc, argv, "s:t:p:f:r:S:x:1:2:3:n:qm:M:N:h"))
             != -1)
     {
         switch(opt) {
@@ -1310,6 +1315,13 @@ int main(int argc, char *argv[]) {
                           return 1;
                       }
                       break;
+            case 'M': score_model = atoi(optarg);
+                      if (score_model < 1 || score_model > 3) {
+                          fprintf(stderr,
+                                "(Scoring) model must be 1, 2 or 3!\n");
+                          return 1;
+                      }
+                      break;
             case 'N': null_prior = atof(optarg); break;
             case 'h':
             default:
@@ -1322,6 +1334,8 @@ int main(int argc, char *argv[]) {
         help(argv[0]);
         return 1;
     }
+
+    if (score_model == -1) score_model = model;
 
     t0 = seconds();
     struct text *source = text_read(source_filename);
@@ -1346,7 +1360,8 @@ int main(int argc, char *argv[]) {
         if (links_filename != NULL ||
                 (!reverse && links_filename_fwd == NULL &&
                  links_filename_rev == NULL))
-            align(reverse, source, target, model, null_prior, n_samplers,
+            align(reverse, source, target, model, score_model, null_prior,
+                  n_samplers,
                   quiet, n_iters, links_filename, stats_filename,
                   scores_filename, priors_filename);
     }

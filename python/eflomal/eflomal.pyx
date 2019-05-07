@@ -96,6 +96,7 @@ def align(
         str scores_filename=None,
         str priors_filename=None,
         int model=3,
+        int score_model=0,
         tuple n_iterations=None,
         int n_samplers=1,
         bool quiet=True,
@@ -161,6 +162,7 @@ def align(
     if links_filename_fwd: args.extend(['-f', links_filename_fwd])
     if links_filename_rev: args.extend(['-r', links_filename_rev])
     if statistics_filename: args.extend(['-S', statistics_filename])
+    if score_model > 0: args.extend(['-M', str(score_model)])
     if scores_filename: args.extend(['-x', scores_filename])
     if priors_filename: args.extend(['-p', priors_filename])
     if not quiet: sys.stderr.write(' '.join(args) + '\n')

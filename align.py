@@ -24,6 +24,10 @@ def main():
         '-m', '--model', dest='model', default=3, metavar='N',
         type=int, help='Model (1 = IBM1, 2 = IBM1+HMM, 3 = IBM1+HMM+fertility)')
     parser.add_argument(
+        '-M', '--score-model', dest='score_model', default=0, metavar='N',
+        type=int, help='Model used for sentence scoring '
+                       '(1 = IBM1, 2 = IBM1+HMM, 3 = IBM1+HMM+fertility)')
+    parser.add_argument(
         '--source-prefix', dest='source_prefix_len', default=0, metavar='N',
         type=int, help='Length of prefix for stemming (source)')
     parser.add_argument(
@@ -68,6 +72,10 @@ def main():
         '-r', '--reverse-links', dest='links_filename_rev', type=str,
         metavar='filename',
         help='Filename to write reverse direction alignments to')
+    parser.add_argument(
+        '-x', '--scores', dest='scores_filename', type=str,
+        metavar='filename',
+        help='Filename to write alignment scores to')
     parser.add_argument(
         '-p', '--priors', dest='priors_filename', type=str, metavar='filename',
         help='File to read priors from')
@@ -313,10 +321,11 @@ def main():
           links_filename_fwd=args.links_filename_fwd,
           links_filename_rev=args.links_filename_rev,
           statistics_filename=None,
-          scores_filename=None,
+          scores_filename=args.scores_filename,
           priors_filename=(None if args.priors_filename is None
                            else priorsf.name),
           model=args.model,
+          score_model=args.score_model,
           n_iterations=iters,
           n_samplers=args.n_samplers,
           quiet=not args.verbose,
