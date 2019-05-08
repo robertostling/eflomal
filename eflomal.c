@@ -1276,7 +1276,8 @@ static void help(const char *filename) {
     fprintf(stderr,
 "Usage: %s [-s source_input] [-t target_input] [-p priors_input] "
 "[-f forward_links_output] "
-"[-r reverse_links_output] [-S statistics_output] [-x scores_output] "
+"[-r reverse_links_output] [-S statistics_output] [-F forward_scores_output] "
+"[-R reverse_scores_output] "
 "[-1 n_IBM1_iters] [-2 n_HMM_iters] [-3 n_fertility_iters] "
 "[-n n_samplers] [-N null_prior] [-q] [-M score_model] -m model_type\n",
         filename);
@@ -1288,7 +1289,8 @@ int main(int argc, char *argv[]) {
     char *source_filename = "-", *target_filename = "-",
          *priors_filename = NULL,
          *links_filename_fwd = NULL, *links_filename_rev = NULL,
-         *stats_filename = NULL, *scores_filename = NULL;
+         *stats_filename = NULL,
+         *scores_filename_fwd = NULL, *scores_filename_rev = NULL;
     int n_iters[3];
     int n_samplers = 1, quiet = 0, model = -1, score_model = -1;
     double null_prior = 0.2;
@@ -1297,7 +1299,7 @@ int main(int argc, char *argv[]) {
 
     omp_set_nested(1);
 
-    while ((opt = getopt(argc, argv, "s:t:p:f:r:S:x:1:2:3:n:qm:M:N:h"))
+    while ((opt = getopt(argc, argv, "s:t:p:f:r:S:F:R:1:2:3:n:qm:M:N:h"))
             != -1)
     {
         switch(opt) {
@@ -1306,8 +1308,9 @@ int main(int argc, char *argv[]) {
             case 'p': priors_filename = optarg; break;
             case 'f': links_filename_fwd = optarg; break;
             case 'r': links_filename_rev = optarg; break;
+            case 'F': scores_filename_fwd = optarg; break;
+            case 'R': scores_filename_rev = optarg; break;
             case 'S': stats_filename = optarg; break;
-            case 'x': scores_filename = optarg; break;
             case '1': n_iters[0] = atoi(optarg); break;
             case '2': n_iters[1] = atoi(optarg); break;
             case '3': n_iters[2] = atoi(optarg); break;
@@ -1361,7 +1364,10 @@ int main(int argc, char *argv[]) {
     for (int reverse=0; reverse<=1; reverse++) {
         char *links_filename =
             (reverse? links_filename_rev: links_filename_fwd);
+        char *scores_filename =
+            (reverse? scores_filename_rev: scores_filename_fwd);
         if (links_filename != NULL ||
+                scores_filename != NULL ||
                 (!reverse && links_filename_fwd == NULL &&
                  links_filename_rev == NULL))
             align(reverse, source, target, model, score_model, null_prior,

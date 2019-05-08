@@ -73,9 +73,15 @@ def main():
         metavar='filename',
         help='Filename to write reverse direction alignments to')
     parser.add_argument(
-        '-x', '--scores', dest='scores_filename', type=str,
+        '-F', '--forward-scores', dest='scores_filename_fwd', type=str,
         metavar='filename',
-        help='Filename to write alignment scores to')
+        help='Filename to write alignment scores to (generation '
+            'probability of target sentences)')
+    parser.add_argument(
+        '-R', '--reverse-scores', dest='scores_filename_rev', type=str,
+        metavar='filename',
+        help='Filename to write alignment scores to (generation '
+            'probability of source sentences)')
     parser.add_argument(
         '-p', '--priors', dest='priors_filename', type=str, metavar='filename',
         help='File to read priors from')
@@ -321,7 +327,8 @@ def main():
           links_filename_fwd=args.links_filename_fwd,
           links_filename_rev=args.links_filename_rev,
           statistics_filename=None,
-          scores_filename=args.scores_filename,
+          scores_filename_fwd=args.scores_filename_fwd,
+          scores_filename_rev=args.scores_filename_rev,
           priors_filename=(None if args.priors_filename is None
                            else priorsf.name),
           model=args.model,
