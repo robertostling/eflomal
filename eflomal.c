@@ -1237,7 +1237,8 @@ static void align(
 
     if (links_filename != NULL) {
         if (!quiet)
-            fprintf(stderr, "Writing alignments to %s\n", links_filename);
+            fprintf(stderr, "Writing alignments to %s for %Zu sentencess\n",
+                    links_filename, ta->target->n_sentences);
         FILE *file = (!strcmp(links_filename, "-"))? stdout
                      : fopen(links_filename, "w");
         text_alignment_write_moses(ta, file, reverse);
@@ -1252,7 +1253,10 @@ static void align(
         FILE *file = (!strcmp(scores_filename, "-"))? stdout
                      : fopen(scores_filename, "w");
 
-        if (!quiet) fprintf(stderr, "Computing sentence scores\n");
+        if (!quiet)
+            fprintf(stderr,
+                    "Computing scores using model %d for %Zu sentences\n",
+                    score_model, ta->source->n_sentences);
 
         // Switch to whatever model is specified for scoring
         ta->model = score_model;
