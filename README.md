@@ -118,7 +118,7 @@ contains the following:
 
 and the target input is the following:
 
-    kuro neku
+    kuro neko
 
 the correct output would be:
 
