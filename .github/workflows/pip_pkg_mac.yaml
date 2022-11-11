@@ -1,0 +1,23 @@
+name: Build mac package
+on: push
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: python3 -m pip install virtualenv
+      - run: python3 -m venv eflomal_env
+      - run: source eflomal_env/bin/activate
+      - run: python3 -m pip install numpy Cython twine build --upgrade
+      - run: sed -i 'orig' -e 's/\-lrt //' Makefile
+      - run: sed -i 'orig' -e 's/install -t \$(INSTALLDIR) eflomal/install eflomal \$(INSTALLDIR)/' Makefile
+      - run: make CXX=g++-12 CC=gcc-12
+      - run: make install
+      - run: python3 -m build --sdist
+      - run: python3 -m build --wheel
+      - name: Upload to PYPI
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: python3 -m twine upload dist/*.whl
+
