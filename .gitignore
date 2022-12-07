@@ -27,7 +27,8 @@
 *.i*86
 *.x86_64
 *.hex
-eflomal
+src/eflomal
+python/eflomal/bin
 
 # Debug files
 *.dSYM/

@@ -138,18 +138,7 @@ def align(
         else:
             n_iterations = (max(2, iters4), iters4, iters)
 
-    possible_paths = [os.path.dirname(os.path.realpath(sys.argv[0]))] + \
-                     os.environ['PATH'].split(':')
-    executable = None
-    for path in possible_paths:
-        full_path = os.path.join(path, 'eflomal')
-        if os.path.exists(full_path):
-            executable = full_path
-            break
-    if executable is None:
-        sys.stderr.write('ERROR: eflomal binary not found in either of: ' +
-                         ' '.join(possible_paths) + '\n')
-        sys.exit(1)
+    executable = os.path.join(os.path.dirname(__file__), 'bin', 'eflomal')
     args = [executable,
             '-m', str(model),
             '-s', source_filename,

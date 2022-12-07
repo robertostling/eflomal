@@ -1,2 +1,2 @@
 global-include *.pyx
-include eflomal
+include src/*.c src/*.h src/Makefile
