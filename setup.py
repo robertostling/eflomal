@@ -1,38 +1,19 @@
 #!/usr/bin/env python3
 
 from setuptools import setup, Extension
-from setuptools.command.egg_info import egg_info
-from setuptools.command.develop import develop
-from setuptools.command.install import install
+from setuptools.command.build_py import build_py as _build_py
 import subprocess
 from Cython.Build import cythonize
 import numpy
 
 
-def compile_and_install_binary():
-    subprocess.check_call('make -C src eflomal', shell=True)
-    subprocess.check_call('make -C src python-install', shell=True)
+class build_py(_build_py):
+    """Custom handler for the 'build_py' command."""
 
-
-class CustomInstall(install):
-    """Custom handler for the 'install' command."""
     def run(self):
-        compile_and_install_binary()
-        super().run()
-
-
-class CustomEggInfo(egg_info):
-    """Custom handler for the 'egg_info' command."""
-    def run(self):
-        compile_and_install_binary()
-        super().run()
-
-
-class CustomDevelop(develop):
-    """Custom handler for the 'develop' command."""
-    def run(self):
-        compile_and_install_binary()
-        super().run()
+        subprocess.check_call('make -C src eflomal', shell=True)
+        subprocess.check_call('make -C src python-install', shell=True)
+        return super().run()
 
 
 cyalign_ext=Extension('eflomal.cython', ['python/eflomal/eflomal.pyx'],
@@ -46,7 +27,7 @@ tests_require = ['pytest']
 
 setup(
     name='eflomal',
-    version='1.0.0-beta',
+    version='1.0.0-beta2',
     author='Robert Östling',
     url='https://github.com/robertostling/eflomal',
     license='GNU GPLv3',
@@ -63,5 +44,5 @@ setup(
     },
     ext_modules=cythonize(cyalign_ext, language_level='3'),
     scripts=['python/scripts/eflomal-align', 'python/scripts/eflomal-makepriors'],
-    cmdclass={'install': CustomInstall, 'develop': CustomDevelop, 'egg_info': CustomEggInfo}
+    cmdclass={'build_py': build_py}
 )

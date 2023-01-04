@@ -3,35 +3,38 @@ name: Build and publish wheels
 on: [push, pull_request]
 
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    # build on every tag starting with 'v'
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, macos-11]
+  # Warning: The build_wheel job does succeed, but the wheels are not
+  # working properly across different environments.
 
-    steps:
-      - uses: actions/checkout@v3
-
-      # Used to host cibuildwheel
-      - uses: actions/setup-python@v3
-
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.11.3
-
-      - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
-        env:
-          CIBW_ENVIRONMENT_MACOS: CXX=g++-12 CC=gcc-12
-        # to supply options, put them in 'env', like:
-        # env:
-        #   CIBW_SOME_OPTION: value
-
-      - uses: actions/upload-artifact@v3
-        with:
-          path: ./wheelhouse/*.whl
+  # build_wheels:
+  #   name: Build wheels on ${{ matrix.os }}
+  #   runs-on: ${{ matrix.os }}
+  #   # build on every tag starting with 'v'
+  #   if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+  #   strategy:
+  #     matrix:
+  #       os: [ubuntu-20.04, macos-11]
+  #
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #
+  #     # Used to host cibuildwheel
+  #     - uses: actions/setup-python@v3
+  #
+  #     - name: Install cibuildwheel
+  #       run: python -m pip install cibuildwheel==2.11.3
+  #
+  #     - name: Build wheels
+  #       run: python -m cibuildwheel --output-dir wheelhouse
+  #       env:
+  #         CIBW_ENVIRONMENT_MACOS: CXX=g++-12 CC=gcc-12
+  #       # to supply options, put them in 'env', like:
+  #       # env:
+  #       #   CIBW_SOME_OPTION: value
+  #
+  #     - uses: actions/upload-artifact@v3
+  #       with:
+  #         path: ./wheelhouse/*.whl
 
   build_sdist:
     name: Build source distribution
@@ -47,7 +50,7 @@ jobs:
           path: dist/*.tar.gz
 
   upload_pypi:
-    needs: [build_wheels, build_sdist]
+    needs: [build_sdist]
     runs-on: ubuntu-latest
     # upload to PyPI on every tag starting with 'v'
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -63,6 +66,5 @@ jobs:
 
       - uses: pypa/gh-action-pypi-publish@v1.5.0
         with:
-          user: ${{ secrets.PYPI_USERNAME }}
-          password: ${{ secrets.PYPI_PASSWORD }}
+          password: ${{ secrets.PYPI_API_TOKEN }}
           # To test: repository_url: https://test.pypi.org/legacy/

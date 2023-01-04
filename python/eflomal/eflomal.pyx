@@ -158,5 +158,5 @@ def align(
     if priors_filename: args.extend(['-p', priors_filename])
     if not quiet: sys.stderr.write(' '.join(args) + '\n')
     if use_gdb: args = ['gdb', '-ex=run', '--args'] + args
-    subprocess.call(args)
+    subprocess.run(args, check=True)
 
