@@ -1,0 +1,2 @@
+global-include *.pyx
+include src/*.c src/*.h src/Makefile
