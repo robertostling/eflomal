@@ -83,14 +83,16 @@ has not been tested yet.
 
 ## Generating priors
 
-If you have a large file that you want to use as "training data", `en-sv`, and
-a small file  that you later want to align quickly, `en-sv.small`, start by
-aligning the large file as usual, e.g.:
+If you have a large file that you want to use as "training data", named `en-sv`,
+and a small file that you later want to align quickly, `en-sv.small`, start by
+aligning the large file as usual, specifying where to write the reverse and forward
+alignment output files:
 
     eflomal-align -i en-sv --model 3 -f en-sv.fwd -r en-sv.rev
 
-Now you can generate priors based on this large aligned file, stored in
-`en-sv.priors`:
+The above command will give you two intermediate files `en-sv.fwd` and `en-sv.rev`.
+Now you can use these to generate priors based on the large aligned file. The
+priors will be stored in `en-sv.priors`:
 
     eflomal-makepriors -i en-sv -f en-sv.fwd -r en-sv.rev --priors en-sv.priors
 
