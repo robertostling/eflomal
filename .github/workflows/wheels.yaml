@@ -50,6 +50,10 @@ jobs:
           path: dist/*.tar.gz
 
   upload_pypi:
+    environment: pypi
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
     needs: [build_sdist]
     runs-on: ubuntu-latest
     # upload to PyPI on every tag starting with 'v'
@@ -64,7 +68,7 @@ jobs:
           name: artifact
           path: dist
 
-      - uses: pypa/gh-action-pypi-publish@v1.5.0
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          # To test: repository_url: https://test.pypi.org/legacy/
+      - uses: pypa/gh-action-pypi-publish@v1.9.0
+        #with:
+        #  password: ${{ secrets.PYPI_API_TOKEN }}
+        # To test: repository_url: https://test.pypi.org/legacy/
