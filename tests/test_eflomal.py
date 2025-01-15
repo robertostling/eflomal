@@ -58,7 +58,8 @@ class TestAlign(unittest.TestCase):
             fwd_links.seek(0)
             rev_links.seek(0)
             priors_tuple = eflomal.calculate_priors(
-                self.src_data, self.trg_data, fwd_links.readlines(), rev_links.readlines())
+                self.src_data, self.trg_data, fwd_links.readlines(),
+                rev_links.readlines(), False)
             self.assertEqual(len(priors_tuple), 5)
             for prior_list in priors_tuple:
                 self.assertGreater(len(prior_list), 0)
