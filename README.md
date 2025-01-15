@@ -109,6 +109,14 @@ This will be much faster than merging `en-sv` and `en-sv.small` and aligning
 them jointly, while nearly as accurate (assuming `en-sv.small` is much smaller
 than `en-sv`).
 
+There is an option `--reverse-priors` to `eflomal-makepriors`, which generates
+priors in the opposite alignment direction. This is so that you can run
+`eflomal-align` once on a large dataset, and generate priors for both
+alignment directions using the files generated. This is only used in the
+special case that you want to align a small dataset in two directions, where
+each direction is initialized with priors derived from the same direction.
+This does not make sense if you use priors derived from symmetrized data.
+
 ## Output data format
 
 The alignment output contains the same number of lines as the input files,

@@ -37,6 +37,10 @@ def main():
             help='File containing reverse (or symmetrized) alignments, '
                  'may be same file as --forward-alignments')
     parser.add_argument(
+            '--reverse-priors', dest='reverse_priors',
+            action='store_true',
+            help='Generate priors for the opposite alignment direction')
+    parser.add_argument(
             '-p', '--priors', dest='priors_filename', type=str,
             metavar='filename', default='-',
             help='File to write priors to (for use with align.py --priors)')
@@ -60,14 +64,15 @@ def main():
              open(args.reverse_alignments_filename, 'r', encoding='utf-8') as revf, \
              open(args.joint_filename, 'r', encoding='utf-8') as jointf:
             priors_list, hmmf_priors, hmmr_priors, ferf_priors, ferr_priors = \
-                calculate_priors(*zip(*sentences_from_joint_file(jointf)), fwdf, revf)
+                calculate_priors(*zip(*sentences_from_joint_file(jointf)),
+                                 fwdf, revf, args.reverse_priors)
     else:
         with open(args.forward_alignments_filename, 'r', encoding='utf-8') as fwdf, \
              open(args.reverse_alignments_filename, 'r', encoding='utf-8') as revf, \
              open(args.source_filename, 'r', encoding='utf-8') as srcf, \
              open(args.target_filename, 'r', encoding='utf-8') as trgf:
             priors_list, hmmf_priors, hmmr_priors, ferf_priors, ferr_priors = \
-                calculate_priors(srcf, trgf, fwdf, revf)
+                calculate_priors(srcf, trgf, fwdf, revf, args.reverse_priors)
 
     priorsf = sys.stdout if args.priors_filename == '-' else \
         open(args.priors_filename, 'w', encoding='utf-8')

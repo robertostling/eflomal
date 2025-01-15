@@ -146,8 +146,13 @@ def sentences_from_joint_file(joint_file, index=None):
 
 
 def calculate_priors(src_sentences, trg_sentences,
-                     fwd_alignments, rev_alignments):
-    """Calculate priors from alignments"""
+                     fwd_alignments, rev_alignments,
+                     reverse):
+    """Calculate priors from alignments
+
+    If `reverse` is True, compute priors for the opposite alignment
+    direction.
+    """
     priors = Counter()
     hmmf_priors = Counter()
     hmmr_priors = Counter()
@@ -159,7 +164,7 @@ def calculate_priors(src_sentences, trg_sentences,
         trg_sent = trg_sent.strip().split()
         fwd_links = [tuple(map(int, s.split('-'))) for s in fwd_line.split()]
         rev_links = [tuple(map(int, s.split('-'))) for s in rev_line.split()]
-        for i, j in fwd_links:
+        for i, j in (rev_links if reverse else fwd_links):
             if i >= len(src_sent) or j >= len(trg_sent):
                 logger.error('alignment out of bounds in line %d: '
                              '(%d, %d)', lineno + 1, i, j)
@@ -191,7 +196,11 @@ def calculate_priors(src_sentences, trg_sentences,
         for j, fert in rev_fert.items():
             ferr_priors[(trg_sent[j], fert)] += 1
     # TODO: confirm EOF in all files
-    return priors, hmmf_priors, hmmr_priors, ferf_priors, ferr_priors
+
+    if reverse:
+        return priors, hmmr_priors, hmmf_priors, ferr_priors, ferf_priors
+    else:
+        return priors, hmmf_priors, hmmr_priors, ferf_priors, ferr_priors
 
 
 def write_priors(priorsf, priors_list, hmmf_priors, hmmr_priors,
